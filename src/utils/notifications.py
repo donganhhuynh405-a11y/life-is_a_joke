@@ -902,8 +902,7 @@ class TelegramNotifier:
                             trend_marker = "🔥" if trending else "💤"
                             vol_marker = "⚡" if volatile else "🌊"
 
-                            message += f"  {regime_emoji} <code>{symbol}</code>: {regime} ({
-                                confidence:.0f}%) {trend_marker}{vol_marker}\n"
+                            message += f"  {regime_emoji} <code>{symbol}</code>: {regime} ({confidence:.0f}%) {trend_marker}{vol_marker}\n"
 
                     # MTF Analysis
                     mtf_analysis = elite_ai_data.get('mtf_analysis', {})
@@ -924,8 +923,7 @@ class TelegramNotifier:
 
                             align_marker = "✅" if is_valid else "❌"
 
-                            message += f"  {rec_emoji} <code>{symbol}</code>: {
-                                alignment:.0f}% {recommendation} {align_marker}\n"
+                            message += f"  {rec_emoji} <code>{symbol}</code>: {alignment:.0f}% {recommendation} {align_marker}\n"
 
                     # Risk & Position Management Status
                     status_items = []
@@ -1038,8 +1036,7 @@ class TelegramNotifier:
                         'bot_instance') and hasattr(
                         self.bot_instance,
                         'news_error_message') and self.bot_instance.news_error_message:
-                    message += f"  ⚙️ <i>News analysis disabled: {
-                        self.bot_instance.news_error_message}</i>\n"
+                    message += f"  ⚙️ <i>News analysis disabled: {self.bot_instance.news_error_message}</i>\n"
                     if 'Missing dependencies' in self.bot_instance.news_error_message:
                         message += "  🔧 <b>FIX:</b> Run: <code>pip install aiohttp feedparser</code>\n"
                     elif 'Disabled in .env' in self.bot_instance.news_error_message:

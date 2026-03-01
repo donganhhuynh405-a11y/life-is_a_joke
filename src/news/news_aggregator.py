@@ -243,10 +243,7 @@ class NewsAggregator:
                                     'title', ''), 'content': article.get(
                                     'description', '') or article.get(
                                     'content', ''), 'url': article.get(
-                                    'url', ''), 'source': f"newsapi:{
-                                    article.get(
-                                        'source', {}).get(
-                                        'name', 'unknown')}", 'published_at': article.get(
+                                    'url', ''), 'source': f"newsapi:{article.get('source', {}).get('name', 'unknown')}", 'published_at': article.get(
                                         'publishedAt', ''), 'symbols': self._extract_symbols(
                                             article.get(
                                                 'title', '') + ' ' + article.get(
@@ -385,10 +382,7 @@ class NewsAggregator:
 
             if saved_count > 0:
                 logger.info(
-                    f"Sentiment analysis: {
-                        sentiment_stats['bullish']} bullish, " f"{
-                        sentiment_stats['bearish']} bearish, {
-                        sentiment_stats['neutral']} neutral")
+                    f"Sentiment analysis: {sentiment_stats['bullish']} bullish, {sentiment_stats['bearish']} bearish, {sentiment_stats['neutral']} neutral")
         except Exception as e:
             logger.error(f"Error saving news to database: {e}")
 

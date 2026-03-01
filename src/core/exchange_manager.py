@@ -197,9 +197,7 @@ class CCXTExchangeManager(ExchangeManager):
                 return float(currency_balance)
             else:
                 logger.warning(
-                    f"Could not find {balance_type} balance dict. Balance keys: {
-                        list(
-                            balance.keys())}")
+                    f"Could not find {balance_type} balance dict. Balance keys: {list(balance.keys())}")
                 return 0.0
 
         except Exception as e:

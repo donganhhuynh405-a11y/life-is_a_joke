@@ -556,9 +556,7 @@ async def example_sentiment_check():
     logger.info('\nTesting cache (should be instant)...')
     cached_result = analyzer.analyze_text(texts[0])
     logger.info(
-        f'Cached result: {
-            cached_result["label"]} (Score: {
-            cached_result["sentiment_score"]:.3f})')
+        f'Cached result: {cached_result["label"]} (Score: {cached_result["sentiment_score"]:.3f})')
 
     # Get cache stats
     stats = analyzer.get_cache_stats()

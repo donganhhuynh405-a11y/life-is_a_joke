@@ -431,10 +431,7 @@ class UltimateTradingAI:
                 stop_loss_pct, 4), 'take_profit_pct': round(
                     take_profit_pct, 4), 'market_regime': pred.get(
                         'market_regime', 'UNKNOWN'), 'predicted_volatility': round(
-                            volatility, 4), 'reasoning': f"{direction} with {
-                                confidence * 100:.1f}% confidence in {
-                                    pred.get(
-                                        'market_regime', 'UNKNOWN')} regime"}
+                            volatility, 4), 'reasoning': f"{direction} with {confidence * 100:.1f}% confidence in {pred.get('market_regime', 'UNKNOWN')} regime"}
 
         logger.info(f"Signal for {symbol}: {signal}")
         return signal

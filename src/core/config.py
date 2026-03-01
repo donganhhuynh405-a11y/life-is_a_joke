@@ -144,7 +144,4 @@ class Config:
 
     def __repr__(self):
         """String representation"""
-        return f"Config(app_name={
-            self.app_name}, env={
-            self.app_env}, trading_enabled={
-            self.trading_enabled})"
+        return f"Config(app_name={self.app_name}, env={self.app_env}, trading_enabled={self.trading_enabled})"

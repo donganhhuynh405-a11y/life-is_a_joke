@@ -181,16 +181,13 @@ class AICommentaryGenerator:
                 conf_pct = confidence * 100
                 if conf_pct >= thresholds['high_confidence']:
                     parts.append(
-                        f"🎯 <b>High confidence signal ({
-                            conf_pct:.0f}%)</b> - Strong indicator alignment detected.")
+                        f"🎯 <b>High confidence signal ({conf_pct:.0f}%)</b> - Strong indicator alignment detected.")
                 elif conf_pct >= thresholds['moderate_confidence']:
                     parts.append(
-                        f"📊 <b>Moderate confidence ({
-                            conf_pct:.0f}%)</b> - Good technical setup.")
+                        f"📊 <b>Moderate confidence ({conf_pct:.0f}%)</b> - Good technical setup.")
                 else:
                     parts.append(
-                        f"⚠️ <b>Lower confidence ({
-                            conf_pct:.0f}%)</b> - Proceed with caution, consider smaller position.")
+                        f"⚠️ <b>Lower confidence ({conf_pct:.0f}%)</b> - Proceed with caution, consider smaller position.")
 
             # Enhanced historical performance commentary with sample size awareness
             if pair_stats and pair_stats['total_trades'] >= 3:
@@ -472,14 +469,10 @@ class AICommentaryGenerator:
                         f"🚀 <b>Excellent week!</b> ${weekly_pnl:,.2f} ({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 elif weekly_pnl > 0:
                     parts.append(
-                        f"📈 <b>Week trending positive:</b> ${
-                            weekly_pnl:,.2f} ({
-                            win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
+                        f"📈 <b>Week trending positive:</b> ${weekly_pnl:,.2f} ({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 elif weekly_pnl > -50:
                     parts.append(
-                        f"📊 <b>Week slightly negative:</b> ${
-                            abs(weekly_pnl):,.2f} ({
-                            win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
+                        f"📊 <b>Week slightly negative:</b> ${abs(weekly_pnl):,.2f} ({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 else:
                     parts.append(
                         f"⚠️ <b>Difficult week:</b> ${abs(weekly_pnl):,.2f} ({win_rate_7d:.0f}% win rate - review needed)")
@@ -558,14 +551,10 @@ class AICommentaryGenerator:
                     roi = (monthly_pnl / start_balance) * 100
                     sign = "profit" if monthly_pnl > 0 else "loss"
                     parts.append(
-                        f"📅 <b>Monthly performance:</b> ${
-                            abs(monthly_pnl):,.2f} {sign} ({
-                            win_rate_30d:.0f}% win rate, ~{
-                            roi:+.1f}% ROI)")
+                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} ({win_rate_30d:.0f}% win rate, ~{roi:+.1f}% ROI)")
                 elif monthly_pnl > 0:
                     parts.append(
-                        f"📅 <b>Monthly performance:</b> ${
-                            monthly_pnl:,.2f} profit ({win_rate_30d:.0f}% win rate)")
+                        f"📅 <b>Monthly performance:</b> ${monthly_pnl:,.2f} profit ({win_rate_30d:.0f}% win rate)")
                 else:
                     parts.append(
                         f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss ({win_rate_30d:.0f}% win rate)")

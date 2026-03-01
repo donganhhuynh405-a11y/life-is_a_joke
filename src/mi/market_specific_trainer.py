@@ -319,10 +319,7 @@ class MarketSpecificTrainer:
                     metrics = json.load(f)
 
             logger.info(
-                f"✅ Loaded model for {symbol} (accuracy: {
-                    metrics.get(
-                        'accuracy',
-                        'N/A') if metrics else 'N/A'})")
+                f"✅ Loaded model for {symbol} (accuracy: {metrics.get('accuracy', 'N/A') if metrics else 'N/A'})")
 
             return model, scaler, metrics
 
@@ -358,9 +355,7 @@ class MarketSpecificTrainer:
             # Взять последнее окно
             if len(df) < self.lookback_period:
                 logger.warning(
-                    f"Insufficient data for prediction: {
-                        len(df)} < {
-                        self.lookback_period}")
+                    f"Insufficient data for prediction: {len(df)} < {self.lookback_period}")
                 return None
 
             window = df.iloc[-self.lookback_period:]
