@@ -248,11 +248,13 @@ class TradeAnalyzer:
                 f"📈 Best performing pair: {best_symbol[0]} (P&L: ${best_symbol[1]['total_pnl']:.2f})")
             if worst_symbol[1]['total_pnl'] < 0:
                 recommendations.append(
-                    f"📉 Worst performing pair: {worst_symbol[0]} (P&L: ${worst_symbol[1]['total_pnl']:.2f}) - Consider disabling or adjusting strategy")
+                    f"📉 Worst performing pair: {worst_symbol[0]} "
+                    f"(P&L: ${worst_symbol[1]['total_pnl']:.2f}) - Consider disabling or adjusting strategy")
 
         # Average win vs loss
         if abs(overall['avg_loss']) > overall['avg_profit']:
             recommendations.append(
-                f"⚠️ Average loss (${abs(overall['avg_loss']):.2f}) exceeds average profit (${overall['avg_profit']:.2f}). Improve risk/reward ratio.")
+                f"⚠️ Average loss (${abs(overall['avg_loss']):.2f}) exceeds "
+                f"average profit (${overall['avg_profit']:.2f}). Improve risk/reward ratio.")
 
         return recommendations

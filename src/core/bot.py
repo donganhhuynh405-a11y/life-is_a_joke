@@ -572,7 +572,9 @@ class TradingBot:
                                         trending = regime_data.get('trending', False)
                                         volatile = regime_data.get('volatile', False)
                                         self.logger.info(
-                                            f"  {symbol}: {regime_name.upper()} (Confidence: {confidence:.1f}%, Trending: {trending}, Volatile: {volatile})")
+                                            f"  {symbol}: {regime_name.upper()} "
+                                            f"(Confidence: {confidence:.1f}%, "
+                                            f"Trending: {trending}, Volatile: {volatile})")
                                         # Store for notification
                                         elite_ai_data['regimes'][symbol] = {
                                             'regime': regime_name.upper(),
@@ -594,8 +596,10 @@ class TradingBot:
                                     if mtf_data:
                                         alignment = mtf_data.get('trend_alignment', 0) * 100
                                         recommendation = mtf_data.get('recommendation', 'NEUTRAL')
-                                        self.logger.info(f"  {symbol}: Alignment {alignment:.0f}% "
-                                                         f"({recommendation}, {'ALIGNED' if is_valid else 'NOT ALIGNED'})")
+                                        self.logger.info(
+                                            f"  {symbol}: Alignment {alignment:.0f}% "
+                                            f"({recommendation}, "
+                                            f"{'ALIGNED' if is_valid else 'NOT ALIGNED'})")
                                         # Store for notification
                                         elite_ai_data['mtf_analysis'][symbol] = {
                                             'alignment': alignment,
@@ -676,7 +680,9 @@ class TradingBot:
                             news_summary['news_items'] = recent_news[:5]  # Top 5 most recent
 
                             self.logger.info(
-                                f"📊 News summary: {news_summary.get('total_count', 0)} total, Bullish: {news_summary.get('bullish_count', 0)}, Bearish: {news_summary.get('bearish_count', 0)}")
+                                f"📊 News summary: {news_summary.get('total_count', 0)} total, "
+                                f"Bullish: {news_summary.get('bullish_count', 0)}, "
+                                f"Bearish: {news_summary.get('bearish_count', 0)}")
                         else:
                             self.logger.info("📰 No news in the last hour")
                             news_summary = {'total_count': 0, 'news_items': []}
