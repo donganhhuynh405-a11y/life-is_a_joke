@@ -113,8 +113,7 @@ class NewsStrategyIntegrator:
 
         # Avoid trading if overwhelming negative news
         if bearish > 5 and score < -0.6:
-            return True, f"Overwhelming negative news ({bearish} bearish articles, score: {
-                score:.2f})"
+            return True, f"Overwhelming negative news ({bearish} bearish articles, score: {score:.2f})"
 
         # Avoid trading if too few news items for reliable signal
         if total < 2:

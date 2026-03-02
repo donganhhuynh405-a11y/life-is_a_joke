@@ -550,15 +550,14 @@ async def example_sentiment_check():
     results = analyzer.batch_analyze(texts)
     for r in results:
         logger.info(
-            f'Text: {r["text"][:30]}... | Label: {r["label"]} | Score: {r["sentiment_score"]:.3f} | Confidence: {r["confidence"]:.3f}')
+            f'Text: {r["text"][:30]}... | Label: {r["label"]} | Score: {r["sentiment_score"]:.3f} '
+            f'| Confidence: {r["confidence"]:.3f}')
 
     # Test cache
     logger.info('\nTesting cache (should be instant)...')
     cached_result = analyzer.analyze_text(texts[0])
     logger.info(
-        f'Cached result: {
-            cached_result["label"]} (Score: {
-            cached_result["sentiment_score"]:.3f})')
+        f'Cached result: {cached_result["label"]} (Score: {cached_result["sentiment_score"]:.3f})')
 
     # Get cache stats
     stats = analyzer.get_cache_stats()

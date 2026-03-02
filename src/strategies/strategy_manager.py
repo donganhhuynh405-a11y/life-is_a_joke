@@ -189,7 +189,8 @@ class StrategyManager:
                                 total_usdt = float(balance['total'].get('USDT', 0))
                                 if total_usdt > 0:
                                     self.logger.warning(
-                                        f"USDT total balance is {total_usdt} but free balance is 0 (funds may be locked in orders)")
+                                        f"USDT total balance is {total_usdt} but free balance is 0 "
+                                        f"(funds may be locked in orders)")
                         elif 'USDT' in balance and isinstance(balance['USDT'], dict):
                             # Alternative structure: some exchanges may use balance[currency][type]
                             usdt_balance = float(balance['USDT'].get('free', 0))
@@ -509,7 +510,8 @@ class StrategyManager:
                                 total_usdt = float(balance['total'].get('USDT', 0))
                                 if total_usdt > 0:
                                     self.logger.warning(
-                                        f"USDT total balance is {total_usdt} but free balance is 0 (funds may be locked in orders)")
+                                        f"USDT total balance is {total_usdt} but free balance is 0 "
+                                        f"(funds may be locked in orders)")
                         elif 'USDT' in balance and isinstance(balance['USDT'], dict):
                             # Alternative structure: some exchanges may use balance[currency][type]
                             usdt_balance = float(balance['USDT'].get('free', 0))
@@ -743,7 +745,8 @@ class StrategyManager:
             # Avoid closing positions at a loss unless it's a stop-loss or take-profit trigger
             if potential_pnl < 0 and not is_stop_loss and not is_take_profit:
                 self.logger.info(
-                    f"Skipping close of {symbol} position {position_id} - would result in loss of ${potential_pnl:.2f}. Reason: {reason}")
+                    f"Skipping close of {symbol} position {position_id} - "
+                    f"would result in loss of ${potential_pnl:.2f}. Reason: {reason}")
                 return
 
             self.logger.info(
@@ -771,14 +774,16 @@ class StrategyManager:
                             # Use the minimum of stored quantity and actual balance
                             if actual_balance <= 0:
                                 self.logger.warning(
-                                    f"No {base_asset} balance to close position {position_id}. Marking as closed in database.")
+                                    f"No {base_asset} balance to close position {position_id}. "
+                                    f"Marking as closed in database.")
                                 # Mark position as closed even though we can't close on exchange
                                 # (position was likely already closed manually or doesn't exist)
                                 # Use entry_price to record zero PnL since we don't know the actual exit
                                 exit_price = entry_price
                             elif actual_balance < quantity:
                                 self.logger.warning(
-                                    f"Actual {base_asset} balance {actual_balance} < stored quantity {quantity}. Using stored quantity for close order.")
+                                    f"Actual {base_asset} balance {actual_balance} "
+                                    f"< stored quantity {quantity}. Using stored quantity for close order.")
                                 # Use the original quantity for the close order to match the open
                                 # The exchange will handle any rounding/dust issues
                         except Exception as balance_err:
@@ -793,7 +798,8 @@ class StrategyManager:
 
                         if estimated_value > 0 and estimated_value < min_order_value:
                             self.logger.warning(
-                                f"Order value ${estimated_value:.2f} below minimum ${min_order_value}. Marking position as closed without exchange order.")
+                                f"Order value ${estimated_value:.2f} below minimum ${min_order_value}. "
+                                f"Marking position as closed without exchange order.")
                             # Use entry_price to record zero PnL since we can't close on exchange
                             exit_price = entry_price
                         else:
@@ -822,7 +828,8 @@ class StrategyManager:
                     # Check if error is due to position not existing on exchange
                     if 'insufficient' in error_str or 'balance' in error_str or 'exceeded lower limit' in error_str:
                         self.logger.warning(
-                            f"Position {position_id} cannot be closed on exchange ({str(e)}). Marking as closed in database.")
+                            f"Position {position_id} cannot be closed on exchange ({str(e)}). "
+                            f"Marking as closed in database.")
                         # Use entry_price to record zero PnL since trade failed to execute
                         exit_price = entry_price
                     else:
@@ -948,7 +955,8 @@ class StrategyManager:
             multiplier = self.adaptive_tactics.tactical_overrides.get(
                 'position_size_multiplier', 1.0)
             self.logger.info(
-                f"🤖 Adaptive tactics: Adjusting position size by {multiplier}x (${base_size:.2f} → ${adjusted_size:.2f})")
+                f"🤖 Adaptive tactics: Adjusting position size by {multiplier}x "
+                f"(${base_size:.2f} → ${adjusted_size:.2f})")
 
         return adjusted_size
 

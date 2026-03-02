@@ -102,8 +102,7 @@ class RiskManager:
             quantity = self.config.max_position_size
 
         self.logger.debug(
-            f"Calculated position size for {symbol}: {quantity} (value: {
-                quantity * current_price})")
+            f"Calculated position size for {symbol}: {quantity} (value: {quantity * current_price})")
 
         return quantity
 
