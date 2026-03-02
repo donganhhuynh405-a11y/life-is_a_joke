@@ -698,8 +698,7 @@ class TelegramNotifier:
 
                 total_emoji = "💰" if total_pnl > 0 else "💸" if total_pnl < 0 else "➖"
                 total_sign = "+" if total_pnl > 0 else ""
-                message += f"{total_emoji} <b>{self.t('pnl',
-                                                      'P&L')} Total:</b> <code>{total_sign}${total_pnl:,.2f}</code>\n"
+                message += f"{total_emoji} <b>{self.t('pnl', 'P&L')} Total:</b> <code>{total_sign}${total_pnl:,.2f}</code>\n"
 
             # Add AI commentary if available
             if ai_commentary:
@@ -723,8 +722,7 @@ class TelegramNotifier:
                     else:
                         market_sentiment = f"Смешанный рынок 🟡 ({bullish}↑ {bearish}↓ {sideways}↔️)"
 
-                    message += f"  📊 {self.t('market_sentiment',
-                                             'Market Sentiment')}: <b>{market_sentiment}</b>\n\n"
+                    message += f"  📊 {self.t('market_sentiment', 'Market Sentiment')}: <b>{market_sentiment}</b>\n\n"
 
                     # Show top 3 symbols with trends
                     message += "  <b>Топ символы:</b>\n"
@@ -850,8 +848,7 @@ class TelegramNotifier:
                     message += f"\n\n📊 <b>{self.t('strategy_status', 'AI Strategy Status')}:</b>\n"
 
                     # Always show risk level
-                    message += f"  {risk_emoji} {self.t('risk_level',
-                                                        'Risk Level')}: <b>{risk_level_text}</b>\n"
+                    message += f"  {risk_emoji} {self.t('risk_level', 'Risk Level')}: <b>{risk_level_text}</b>\n"
 
                     # Show adjustments section
                     message += f"\n  <b>{self.t('adjustments', 'Current Adjustments')}:</b>\n"
@@ -869,8 +866,7 @@ class TelegramNotifier:
                             max_pos = adjustments['max_positions']
                             message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
                     else:
-                        message += f"  ✅ {self.t('optimal_conditions',
-                                                 'Optimal trading conditions - no adjustments needed')}\n"
+                        message += f"  ✅ {self.t('optimal_conditions', 'Optimal trading conditions - no adjustments needed')}\n"
 
                     # Always show reasoning if available (independent of adjustments)
                     if reasoning and len(reasoning) > 0:
