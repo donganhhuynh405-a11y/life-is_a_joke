@@ -170,8 +170,8 @@ class StrategyManager:
                     try:
                         if 'free' in balance and isinstance(balance['free'], dict):
                             # Log all available currencies and their balances for debugging
-                            self.logger.info(
-                                f"Available currencies: {list(balance['free'].keys())}")
+                            available_currencies = list(balance['free'].keys())
+                            self.logger.info(f"Available currencies: {available_currencies}")
                             currencies_with_balance = {
                                 k: v for k, v in balance['free'].items() if v > 0}
                             if currencies_with_balance:
@@ -194,14 +194,13 @@ class StrategyManager:
                         elif 'USDT' in balance and isinstance(balance['USDT'], dict):
                             # Alternative structure: some exchanges may use balance[currency][type]
                             usdt_balance = float(balance['USDT'].get('free', 0))
-                            self.logger.info(
-                                f"USDT balance from balance['USDT']['free']: {usdt_balance}")
+                            self.logger.info(f"USDT balance from balance['USDT']['free']: {usdt_balance}")
                         else:
-                            self.logger.warning(
-                                f"Unexpected balance structure. Balance keys: {list(balance.keys())}")
+                            balance_keys = list(balance.keys())
+                            self.logger.warning(f"Unexpected balance structure. Balance keys: {balance_keys}")
                             if 'free' in balance:
-                                self.logger.warning(
-                                    f"Type of balance['free']: {type(balance.get('free'))}")
+                                free_type = type(balance.get('free'))
+                                self.logger.warning(f"Type of balance['free']: {free_type}")
                     except (TypeError, ValueError, AttributeError) as e:
                         self.logger.error(f"Error extracting USDT balance: {e}", exc_info=True)
 
@@ -491,8 +490,8 @@ class StrategyManager:
                     try:
                         if 'free' in balance and isinstance(balance['free'], dict):
                             # Log all available currencies and their balances for debugging
-                            self.logger.info(
-                                f"Available currencies: {list(balance['free'].keys())}")
+                            available_currencies = list(balance['free'].keys())
+                            self.logger.info(f"Available currencies: {available_currencies}")
                             currencies_with_balance = {
                                 k: v for k, v in balance['free'].items() if v > 0}
                             if currencies_with_balance:
@@ -515,14 +514,13 @@ class StrategyManager:
                         elif 'USDT' in balance and isinstance(balance['USDT'], dict):
                             # Alternative structure: some exchanges may use balance[currency][type]
                             usdt_balance = float(balance['USDT'].get('free', 0))
-                            self.logger.info(
-                                f"USDT balance from balance['USDT']['free']: {usdt_balance}")
+                            self.logger.info(f"USDT balance from balance['USDT']['free']: {usdt_balance}")
                         else:
-                            self.logger.warning(
-                                f"Unexpected balance structure. Balance keys: {list(balance.keys())}")
+                            balance_keys = list(balance.keys())
+                            self.logger.warning(f"Unexpected balance structure. Balance keys: {balance_keys}")
                             if 'free' in balance:
-                                self.logger.warning(
-                                    f"Type of balance['free']: {type(balance.get('free'))}")
+                                free_type = type(balance.get('free'))
+                                self.logger.warning(f"Type of balance['free']: {free_type}")
                     except (TypeError, ValueError, AttributeError) as e:
                         self.logger.error(f"Error extracting USDT balance: {e}", exc_info=True)
 
