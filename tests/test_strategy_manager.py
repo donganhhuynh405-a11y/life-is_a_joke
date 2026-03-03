@@ -9,8 +9,7 @@ Tests that the stop-loss / take-profit guard behaves correctly:
 import sys
 import os
 import types
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Ensure src is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))

@@ -6,6 +6,12 @@ A comprehensive strategy using multiple proven technical indicators for better e
 from typing import List, Dict, Tuple
 from strategies.base_strategy import BaseStrategy
 
+try:
+    from ml.signal_enhancer import MLSignalEnhancer
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+
 
 class EnhancedMultiIndicatorStrategy(BaseStrategy):
     """
@@ -127,16 +133,65 @@ class EnhancedMultiIndicatorStrategy(BaseStrategy):
                 macd_line, signal_line, bb_lower, volumes[-1], volume_ma
             )
 
-            self.logger.info(f"{symbol} BUY signal (Score: {buy_score}/100): {', '.join(reasons)}")
+            # ML Enhancement
+            final_score = buy_score
+            ml_adjustment = 0
+            ml_reasoning = None
+            if ML_AVAILABLE and buy_score >= 50:
+                try:
+                    db_path = getattr(self.db, 'db_path', None) or getattr(
+                        self.db, '_db_path', '/var/lib/trading-bot/trading_bot.db'
+                    )
+                    news_aggregator = getattr(self, 'news_aggregator', None)
+                    enhancer = MLSignalEnhancer(
+                        db_path=db_path, news_aggregator=news_aggregator
+                    )
+                    market_state = {
+                        'rsi': rsi,
+                        'macd': macd_line,
+                        'trend': 'bullish' if ema_fast > ema_slow else 'bearish',
+                        'volatility': self._calculate_atr(closes),
+                    }
+                    raw_signal = {
+                        'symbol': symbol,
+                        'action': 'BUY',
+                        'confidence': buy_score,
+                        'market_state': market_state,
+                    }
+                    enhanced = enhancer.enhance_signal(raw_signal)
+                    final_score = enhanced.get('final_confidence', buy_score)
+                    ml_adjustment = enhanced.get('ml_adjustment', 0)
+                    ml_reasoning = enhanced.get('ml_reasoning')
+                except Exception as ml_err:
+                    self.logger.warning(
+                        f"{symbol}: ML enhancement failed, using technical score: {ml_err}"
+                    )
 
-            signals.append({
-                'action': 'BUY',
-                'symbol': symbol,
-                'price': current_price,
-                'confidence': buy_score,
-                'reason': f"Multi-indicator ({buy_score}/100): {', '.join(reasons)}"
-            })
-            self.last_signal[symbol] = 'BUY'
+            if final_score >= self.min_entry_score:
+                self.logger.info(
+                    f"{symbol} BUY signal (Score: {final_score}/100, "
+                    f"technical: {buy_score}, ML: {ml_adjustment:+d}): {', '.join(reasons)}"
+                )
+                strategy_label = (
+                    "EnhancedMultiIndicator (ML-Enhanced)" if ml_adjustment != 0
+                    else "EnhancedMultiIndicator"
+                )
+                signals.append({
+                    'action': 'BUY',
+                    'symbol': symbol,
+                    'price': current_price,
+                    'confidence': final_score,
+                    'base_confidence': buy_score,
+                    'ml_adjustment': ml_adjustment,
+                    'ml_reasoning': ml_reasoning,
+                    'strategy': strategy_label,
+                    'reason': (
+                        f"Technical+ML ({final_score}/100): {', '.join(reasons)}"
+                        if ml_adjustment != 0
+                        else f"Multi-indicator ({buy_score}/100): {', '.join(reasons)}"
+                    ),
+                })
+                self.last_signal[symbol] = 'BUY'
 
         elif has_position and sell_score >= self.min_entry_score:
             position = next((p for p in open_positions if p['symbol'] == symbol), None)
@@ -225,6 +280,13 @@ class EnhancedMultiIndicatorStrategy(BaseStrategy):
         lower = middle - (self.bb_std * std_dev)
 
         return upper, middle, lower
+
+    def _calculate_atr(self, closes: List[float], period: int = 14) -> float:
+        """Calculate Average True Range (simplified, using close-to-close)"""
+        if len(closes) < period + 1:
+            return 0.0
+        ranges = [abs(closes[i] - closes[i - 1]) for i in range(1, len(closes))]
+        return sum(ranges[-period:]) / period
 
     def _calculate_buy_score(self, price: float, ema_fast: float, ema_medium: float,
                              ema_slow: float, rsi: float, macd: float, signal: float,

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.database import Database
+from core.database import Database  # noqa: E402
 
 
 @pytest.fixture

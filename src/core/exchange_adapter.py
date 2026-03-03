@@ -312,17 +312,13 @@ class ExchangeAdapter:
                         min_order_value = 5.0  # Minimum $5 USD
                         if quote_amount < min_order_value:
                             self.logger.warning(
-                                f"Order value ${
-                                    quote_amount:.2f} below minimum ${min_order_value}, adjusting")
+                                f"Order value ${quote_amount:.2f} below minimum ${min_order_value}, adjusting")
                             quote_amount = min_order_value
                             quantity = quote_amount / current_price
 
                         self.logger.info(
-                            f"Bybit market buy: {
-                                quantity:.6f} {
-                                symbol.split('/')[0]} = ${
-                                quote_amount:.2f} USDT at price ${
-                                current_price:.4f}")
+                            f"Bybit market buy: {quantity:.6f} {symbol.split('/')[0]} "
+                            f"= ${quote_amount:.2f} USDT at price ${current_price:.4f}")
 
                     # Use standard create_market_order for both buy and sell
                     # Bybit UTA accepts base currency amount for market orders
@@ -337,12 +333,8 @@ class ExchangeAdapter:
                         symbol, side.lower(), quantity, price, params)
 
                 self.logger.info(
-                    f"Order created successfully: ID={
-                        order.get('id')}, Status={
-                        order.get('status')}, Filled={
-                        order.get(
-                            'filled',
-                            0)}")
+                    f"Order created successfully: ID={order.get('id')}, "
+                    f"Status={order.get('status')}, Filled={order.get('filled', 0)}")
 
                 return {
                     'orderId': order['id'],
@@ -374,7 +366,8 @@ class ExchangeAdapter:
             error_msg = f"Failed to create order: {type(e).__name__}: {str(e)}"
             self.logger.error(error_msg)
             self.logger.error(
-                f"Order details - Symbol: {symbol}, Side: {side}, Type: {order_type}, Quantity: {quantity}, Price: {price}")
+                f"Order details - Symbol: {symbol}, Side: {side}, "
+                f"Type: {order_type}, Quantity: {quantity}, Price: {price}")
             raise Exception(error_msg)
 
     def get_min_order_size(self, symbol: str) -> float:
