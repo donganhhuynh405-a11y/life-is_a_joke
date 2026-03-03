@@ -170,12 +170,8 @@ class StrategyManager:
                     try:
                         if 'free' in balance and isinstance(balance['free'], dict):
                             # Log all available currencies and their balances for debugging
-                            self.logger.info(
-                                f"Available currencies: {
-                                    list(
-                                        balance['free'].keys())}")
-                            currencies_with_balance = {
-                                k: v for k, v in balance['free'].items() if v > 0}
+                            self.logger.info(f"Available currencies: {list(balance['free'].keys())}")
+                            currencies_with_balance = {k: v for k, v in balance['free'].items() if v > 0}
                             if currencies_with_balance:
                                 self.logger.info(f"Non-zero balances: {currencies_with_balance}")
                             else:
