@@ -184,9 +184,7 @@ class AdvancedRiskManager:
 
         # Check total portfolio heat
         if total_heat > self.max_portfolio_heat_pct:
-            return False, f"Portfolio heat would be {
-                total_heat:.1f}% (max {
-                self.max_portfolio_heat_pct}%)"
+            return False, f"Portfolio heat would be {total_heat:.1f}% (max {self.max_portfolio_heat_pct}%)"
 
         # Check correlated risk if provided
         if correlated_symbols:
@@ -196,9 +194,7 @@ class AdvancedRiskManager:
                     correlated_heat += self.open_positions_risk[corr_symbol]
 
             if correlated_heat > self.max_correlated_risk_pct:
-                return False, f"Correlated risk would be {
-                    correlated_heat:.1f}% (max {
-                    self.max_correlated_risk_pct}%)"
+                return False, f"Correlated risk would be {correlated_heat:.1f}% (max {self.max_correlated_risk_pct}%)"
 
         return True, "OK"
 

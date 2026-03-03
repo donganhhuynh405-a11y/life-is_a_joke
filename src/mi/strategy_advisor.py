@@ -33,9 +33,7 @@ class StrategyAdvisor:
         self.aggressive_mode = config.get('ADAPTIVE_AGGRESSIVE_MODE', False)
 
         logger.info(
-            f"StrategyAdvisor initialized. Adaptive: {
-                self.enable_adaptive}, Aggressive: {
-                self.aggressive_mode}")
+            f"StrategyAdvisor initialized. Adaptive: {self.enable_adaptive}, Aggressive: {self.aggressive_mode}")
 
     def analyze_and_advise(
             self, market_data: Dict[str, Any], performance_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -242,8 +240,7 @@ class StrategyAdvisor:
         max_drawdown = performance_data.get('max_drawdown_pct', 0)
         if max_drawdown > 30:
             recommendations.append(
-                f"🚨 High drawdown ({
-                    max_drawdown:.1f}%): Focus on capital preservation")
+                f"🚨 High drawdown ({max_drawdown:.1f}%): Focus on capital preservation")
         elif max_drawdown > 15:
             recommendations.append(f"⚠️ Moderate drawdown ({max_drawdown:.1f}%): Trade cautiously")
 
@@ -251,8 +248,7 @@ class StrategyAdvisor:
         win_rate = performance_data.get('win_rate', 50)
         if win_rate < 35:
             recommendations.append(
-                f"📊 Low win rate ({
-                    win_rate:.1f}%): Review strategy and reduce activity")
+                f"📊 Low win rate ({win_rate:.1f}%): Review strategy and reduce activity")
         elif win_rate > 65:
             recommendations.append(f"✅ High win rate ({win_rate:.1f}%): Strategy performing well")
 
@@ -271,8 +267,7 @@ class StrategyAdvisor:
                 "📉 Negative Sharpe ratio: Strategy underperforming risk-free rate")
         elif sharpe > 2:
             recommendations.append(
-                f"✅ Excellent Sharpe ratio ({
-                    sharpe:.2f}): Strong risk-adjusted returns")
+                f"✅ Excellent Sharpe ratio ({sharpe:.2f}): Strong risk-adjusted returns")
 
         return recommendations
 

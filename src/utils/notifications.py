@@ -202,7 +202,10 @@ class TelegramNotifier:
 
             # Build message with safe string formatting
             score_text = f"\n⭐ Signal Score: <b>{score}/100</b>" if score is not None else ""
-            positions_text = f"\n📋 Open Positions: <b>{open_positions_count}</b>" if open_positions_count is not None else ""
+            positions_text = (
+                f"\n📋 Open Positions: <b>{open_positions_count}</b>"
+                if open_positions_count is not None else ""
+            )
 
             # Generate AI commentary
             ai_commentary = ""
@@ -321,7 +324,10 @@ class TelegramNotifier:
             pnl_emoji = "💰" if profit else "💸"
 
             score_text = f"\n⭐ Signal Score: <b>{score}/100</b>" if score is not None else ""
-            positions_text = f"\n📋 Open Positions: <b>{open_positions_count}</b>" if open_positions_count is not None else ""
+            positions_text = (
+                f"\n📋 Open Positions: <b>{open_positions_count}</b>"
+                if open_positions_count is not None else ""
+            )
 
             # Format P&L with adaptive decimal places for small values
             # Use more decimals for values < $0.01 to show actual loss/profit
@@ -692,8 +698,7 @@ class TelegramNotifier:
 
                 total_emoji = "💰" if total_pnl > 0 else "💸" if total_pnl < 0 else "➖"
                 total_sign = "+" if total_pnl > 0 else ""
-                message += f"{total_emoji} <b>{self.t('pnl',
-                                                      'P&L')} Total:</b> <code>{total_sign}${total_pnl:,.2f}</code>\n"
+                message += f"{total_emoji} <b>{self.t('pnl', 'P&L')} Total:</b> <code>{total_sign}${total_pnl:,.2f}</code>\n"
 
             # Add AI commentary if available
             if ai_commentary:
@@ -717,8 +722,7 @@ class TelegramNotifier:
                     else:
                         market_sentiment = f"Смешанный рынок 🟡 ({bullish}↑ {bearish}↓ {sideways}↔️)"
 
-                    message += f"  📊 {self.t('market_sentiment',
-                                             'Market Sentiment')}: <b>{market_sentiment}</b>\n\n"
+                    message += f"  📊 {self.t('market_sentiment', 'Market Sentiment')}: <b>{market_sentiment}</b>\n\n"
 
                     # Show top 3 symbols with trends
                     message += "  <b>Топ символы:</b>\n"
@@ -757,8 +761,11 @@ class TelegramNotifier:
                         else:
                             strategy = "Ждать прорыва" if adx < 20 else "Range-торговля"
 
-                        message += f"  {trend_emoji} <code>{symbol}</code>: {strength *
-                                                                             100:.0f}% ADX:{adx:.0f} - <i>{strategy}</i>\n"
+                        strength_pct = strength * 100
+                        message += (
+                            f"  {trend_emoji} <code>{symbol}</code>: "
+                            f"{strength_pct:.0f}% ADX:{adx:.0f} - <i>{strategy}</i>\n"
+                        )
                         trend_count += 1
 
                     # Trading plan summary
@@ -841,8 +848,7 @@ class TelegramNotifier:
                     message += f"\n\n📊 <b>{self.t('strategy_status', 'AI Strategy Status')}:</b>\n"
 
                     # Always show risk level
-                    message += f"  {risk_emoji} {self.t('risk_level',
-                                                        'Risk Level')}: <b>{risk_level_text}</b>\n"
+                    message += f"  {risk_emoji} {self.t('risk_level', 'Risk Level')}: <b>{risk_level_text}</b>\n"
 
                     # Show adjustments section
                     message += f"\n  <b>{self.t('adjustments', 'Current Adjustments')}:</b>\n"
@@ -860,8 +866,7 @@ class TelegramNotifier:
                             max_pos = adjustments['max_positions']
                             message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
                     else:
-                        message += f"  ✅ {self.t('optimal_conditions',
-                                                 'Optimal trading conditions - no adjustments needed')}\n"
+                        message += f"  ✅ {self.t('optimal_conditions', 'Optimal trading conditions - no adjustments needed')}\n"
 
                     # Always show reasoning if available (independent of adjustments)
                     if reasoning and len(reasoning) > 0:
@@ -902,8 +907,10 @@ class TelegramNotifier:
                             trend_marker = "🔥" if trending else "💤"
                             vol_marker = "⚡" if volatile else "🌊"
 
-                            message += f"  {regime_emoji} <code>{symbol}</code>: {regime} ({
-                                confidence:.0f}%) {trend_marker}{vol_marker}\n"
+                            message += (
+                                f"  {regime_emoji} <code>{symbol}</code>: "
+                                f"{regime} ({confidence:.0f}%) {trend_marker}{vol_marker}\n"
+                            )
 
                     # MTF Analysis
                     mtf_analysis = elite_ai_data.get('mtf_analysis', {})
@@ -924,8 +931,10 @@ class TelegramNotifier:
 
                             align_marker = "✅" if is_valid else "❌"
 
-                            message += f"  {rec_emoji} <code>{symbol}</code>: {
-                                alignment:.0f}% {recommendation} {align_marker}\n"
+                            message += (
+                                f"  {rec_emoji} <code>{symbol}</code>: "
+                                f"{alignment:.0f}% {recommendation} {align_marker}\n"
+                            )
 
                     # Risk & Position Management Status
                     status_items = []
@@ -1038,8 +1047,7 @@ class TelegramNotifier:
                         'bot_instance') and hasattr(
                         self.bot_instance,
                         'news_error_message') and self.bot_instance.news_error_message:
-                    message += f"  ⚙️ <i>News analysis disabled: {
-                        self.bot_instance.news_error_message}</i>\n"
+                    message += f"  ⚙️ <i>News analysis disabled: {self.bot_instance.news_error_message}</i>\n"
                     if 'Missing dependencies' in self.bot_instance.news_error_message:
                         message += "  🔧 <b>FIX:</b> Run: <code>pip install aiohttp feedparser</code>\n"
                     elif 'Disabled in .env' in self.bot_instance.news_error_message:

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from ml.news_sentiment import NewsSentimentAnalyzer
-from ml.pattern_matcher import PatternMatcher
-from ml.signal_enhancer import MLSignalEnhancer
+from ml.news_sentiment import NewsSentimentAnalyzer  # noqa: E402
+from ml.pattern_matcher import PatternMatcher  # noqa: E402
+from ml.signal_enhancer import MLSignalEnhancer  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
