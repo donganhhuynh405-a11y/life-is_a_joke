@@ -192,9 +192,7 @@ class TradeAnalyzer:
                 except (ValueError, AttributeError) as e:
                     # Skip positions with invalid datetime formats
                     self.logger.debug(
-                        f"Could not parse datetime for position {
-                            p.get(
-                                'id', 'unknown')}: {e}")
+                        f"Could not parse datetime for position {p.get('id', 'unknown')}: {e}")
                     continue
 
         avg_holding_time = sum(holding_times) / len(holding_times) if holding_times else 0
@@ -229,16 +227,14 @@ class TradeAnalyzer:
         # Win rate analysis
         if overall['win_rate'] < 50:
             recommendations.append(
-                f"⚠️ Win rate is {
-                    overall['win_rate']:.1f}%. Consider adjusting strategy parameters.")
+                f"⚠️ Win rate is {overall['win_rate']:.1f}%. Consider adjusting strategy parameters.")
         elif overall['win_rate'] > 70:
             recommendations.append(f"✅ Excellent win rate of {overall['win_rate']:.1f}%!")
 
         # Profit factor analysis
         if overall['profit_factor'] < 1.5:
             recommendations.append(
-                f"⚠️ Profit factor is {
-                    overall['profit_factor']:.2f}. Aim for >1.5 for sustainable profitability.")
+                f"⚠️ Profit factor is {overall['profit_factor']:.2f}. Aim for >1.5 for sustainable profitability.")
         elif overall['profit_factor'] > 2.0:
             recommendations.append(f"✅ Strong profit factor of {overall['profit_factor']:.2f}!")
 
@@ -249,21 +245,16 @@ class TradeAnalyzer:
             worst_symbol = min(symbol_stats.items(), key=lambda x: x[1]['total_pnl'])
 
             recommendations.append(
-                f"📈 Best performing pair: {
-                    best_symbol[0]} (P&L: ${
-                    best_symbol[1]['total_pnl']:.2f})")
+                f"📈 Best performing pair: {best_symbol[0]} (P&L: ${best_symbol[1]['total_pnl']:.2f})")
             if worst_symbol[1]['total_pnl'] < 0:
                 recommendations.append(
-                    f"📉 Worst performing pair: {
-                        worst_symbol[0]} (P&L: ${
-                        worst_symbol[1]['total_pnl']:.2f}) - Consider disabling or adjusting strategy")
+                    f"📉 Worst performing pair: {worst_symbol[0]} "
+                    f"(P&L: ${worst_symbol[1]['total_pnl']:.2f}) - Consider disabling or adjusting strategy")
 
         # Average win vs loss
         if abs(overall['avg_loss']) > overall['avg_profit']:
             recommendations.append(
-                f"⚠️ Average loss (${
-                    abs(
-                        overall['avg_loss']):.2f}) exceeds average profit (${
-                    overall['avg_profit']:.2f}). Improve risk/reward ratio.")
+                f"⚠️ Average loss (${abs(overall['avg_loss']):.2f}) exceeds "
+                f"average profit (${overall['avg_profit']:.2f}). Improve risk/reward ratio.")
 
         return recommendations

@@ -298,8 +298,7 @@ class UltimateTrainer:
             # Save periodic checkpoint
             if (epoch + 1) % 10 == 0:
                 self.save_checkpoint(
-                    f'checkpoint_epoch_{
-                        epoch + 1}.pt',
+                    f'checkpoint_epoch_{epoch + 1}.pt',
                     epoch,
                     val_loss,
                     val_metrics)

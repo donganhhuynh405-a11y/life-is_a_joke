@@ -162,10 +162,7 @@ class MLEnhancedStrategy:
         optimized_size = base_position_size * total_multiplier
 
         logger.info(
-            f"📊 Position size for {symbol}: {
-                base_position_size:.4f} → {
-                optimized_size:.4f} (×{
-                total_multiplier:.2f})")
+            f"📊 Position size for {symbol}: {base_position_size:.4f} → {optimized_size:.4f} (×{total_multiplier:.2f})")
 
         return optimized_size
 
@@ -201,8 +198,7 @@ class MLEnhancedStrategy:
             if model_accuracy < 0.6:
                 adjusted_threshold = min_confidence_threshold * 1.2
                 if confidence < adjusted_threshold:
-                    return False, f"Low model accuracy ({
-                        model_accuracy:.2f}), need higher confidence"
+                    return False, f"Low model accuracy ({model_accuracy:.2f}), need higher confidence"
 
             if not signal.get('signals_agree', False):
                 adjusted_threshold = min_confidence_threshold * 1.15
