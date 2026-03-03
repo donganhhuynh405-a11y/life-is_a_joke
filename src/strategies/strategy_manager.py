@@ -196,6 +196,9 @@ class StrategyManager:
                             usdt_balance = float(balance['USDT'].get('free', 0))
                             self.logger.info(f"USDT balance from balance['USDT']['free']: {usdt_balance}")
                         else:
+                            self.logger.warning(f"Unexpected balance structure. Balance keys: {list(balance.keys())}")
+                            if 'free' in balance:
+                                self.logger.warning(f"Type of balance['free']: {type(balance.get('free'))}")
                             balance_keys = list(balance.keys())
                             self.logger.warning(f"Unexpected balance structure. Balance keys: {balance_keys}")
                             if 'free' in balance:
