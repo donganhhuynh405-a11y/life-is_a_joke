@@ -28,7 +28,7 @@ REPO_URL="https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git"
 REPO_DIR="$HOME/trading-bot-setup/life_is_a_joke"
 BOT_DIR="/opt/Life_Is_A_Joke"
 SERVICE_NAME="trading-bot"
-BRANCH="copilot/update-notification-format"
+BRANCH="main"  # Default to stable branch; override with --branch for PR/feature branches
 
 print_usage() {
     echo "Usage: $0 [--branch <branch_name>]"

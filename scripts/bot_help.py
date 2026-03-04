@@ -80,7 +80,7 @@ def print_update_deployment():
     print_section("UPDATE & DEPLOYMENT", "🔄")
 
     commands = [
-        ("cd /opt/Life_Is_A_Joke && git fetch origin && git checkout copilot/update-notification-format && git pull origin copilot/update-notification-format", "Pull latest changes from repository (branch: copilot/update-notification-format)"),
+        ("cd /opt/Life_Is_A_Joke && git fetch origin && git checkout main && git pull origin main", "Pull latest changes from repository"),
         ("cd /opt/Life_Is_A_Joke && venv/bin/pip install -r requirements.txt", "Update Python dependencies"),
         ("sudo systemctl restart trading-bot", "Restart bot after updates"),
         ("cd /opt/Life_Is_A_Joke && git status", "Check repository status and changes"),
@@ -181,7 +181,7 @@ def print_quick_recipes():
     print_section("QUICK RECIPES", "💡")
 
     print(f"{Colors.YELLOW}Full update and restart:{Colors.NC}")
-    print("   cd /opt/Life_Is_A_Joke && git fetch origin && git checkout copilot/update-notification-format && git pull origin copilot/update-notification-format && venv/bin/pip install -r requirements.txt && sudo systemctl restart trading-bot")
+    print("   cd /opt/Life_Is_A_Joke && git fetch origin && git checkout main && git pull origin main && venv/bin/pip install -r requirements.txt && sudo systemctl restart trading-bot")
     print()
 
     print(f"{Colors.YELLOW}Test AI system:{Colors.NC}")

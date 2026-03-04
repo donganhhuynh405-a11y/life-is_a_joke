@@ -55,17 +55,11 @@ def reset_statistics(db_path: str, skip_confirm: bool = False) -> None:
             # Table may not exist yet — that's fine.
             print(f"  ⚠️  Skipped table '{table}': {exc}")
 
-    # Record an initial balance snapshot with 0 so the ROI denominator
-    # is correct from the first hourly report onwards.  The real opening
-    # USDT balance will overwrite this on the first bot run.
-    try:
-        cursor.execute(
-            "INSERT INTO balance_snapshots (balance_usdt, recorded_at) VALUES (0, ?)",
-            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),)
-        )
-        print("  ✅ Created initial balance snapshot (0 USDT — will be updated on first bot run)")
-    except sqlite3.OperationalError as exc:
-        print(f"  ⚠️  Could not create balance snapshot: {exc}")
+    # Do not insert an artificial 0-balance snapshot here.
+    # The trading bot will record the first real balance snapshot
+    # on its next run, ensuring ROI calculations use a correct
+    # opening balance for the day/month.
+    print("  ℹ️  All balance snapshots cleared — the bot will record a new snapshot on next run.")
 
     conn.close()
 

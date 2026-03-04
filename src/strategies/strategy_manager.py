@@ -1041,11 +1041,15 @@ class StrategyManager:
                             quantity=quantity
                         )
                         order_price = order.get('price')
-                        if order_price is not None and order_price != 'None':
+                        # Only treat the order price as valid if it is a positive float.
+                        # Many exchange adapters return 0, "0", "", or "None" for market orders.
+                        if order_price is not None and order_price != 'None' and order_price != '':
                             try:
-                                exit_price = float(order_price)
+                                parsed_price = float(order_price)
                             except (ValueError, TypeError):
-                                pass
+                                parsed_price = None
+                            if parsed_price is not None and parsed_price > 0:
+                                exit_price = parsed_price
                         self.logger.info(
                             f"Closed position {
                                 position['id']} on exchange: Order ID {
