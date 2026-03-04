@@ -11,9 +11,19 @@ echo ""
 
 # Configuration
 REPO_URL="https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git"
-BRANCH="copilot/update-notification-format"
-INSTALL_DIR="$HOME/life_is_a_joke"
 
+# Default branch is 'main'; can be overridden by CLI arg or env var QUICK_INSTALL_BRANCH
+DEFAULT_BRANCH="main"
+if [ -n "$1" ]; then
+    BRANCH="$1"
+elif [ -n "$QUICK_INSTALL_BRANCH" ]; then
+    BRANCH="$QUICK_INSTALL_BRANCH"
+else
+    BRANCH="$DEFAULT_BRANCH"
+fi
+
+# Installation directory; can be overridden by env var QUICK_INSTALL_DIR
+INSTALL_DIR="${QUICK_INSTALL_DIR:-$HOME/life_is_a_joke}"
 # Check if git is installed
 if ! command -v git &> /dev/null; then
     echo "❌ Error: Git is not installed!"
