@@ -326,6 +326,9 @@ class NewsAggregator:
             try:
                 normalized = date_str.replace('Z', '+00:00')
                 dt = datetime.fromisoformat(normalized)
+                # If datetime is naive (no tzinfo), assume it is already in UTC.
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
                 dt_utc = dt.astimezone(timezone.utc).replace(tzinfo=None)
                 return dt_utc.strftime('%Y-%m-%d %H:%M:%S')
             except ValueError:
