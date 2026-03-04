@@ -30,12 +30,31 @@ BOT_DIR="/opt/Life_Is_A_Joke"
 SERVICE_NAME="trading-bot"
 BRANCH="copilot/update-notification-format"
 
+print_usage() {
+    echo "Usage: $0 [--branch <branch_name>]"
+    echo
+    echo "Options:"
+    echo "  --branch, -b   Specify the git branch to deploy."
+}
+
 # Parse optional --branch argument so the user can deploy a specific PR branch.
 # Usage: sudo ./scripts/update_bot.sh --branch copilot/update-notification-format
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --branch|-b) BRANCH="$2"; shift ;;
-        *) echo "Unknown parameter: $1. Use --branch <branch_name> to specify a branch."; exit 1 ;;
+        --branch|-b)
+            if [[ -z "$2" ]]; then
+                echo "Error: --branch requires a non-empty <branch_name> argument."
+                print_usage
+                exit 1
+            fi
+            BRANCH="$2"
+            shift
+            ;;
+        *)
+            echo "Unknown parameter: $1. Use --branch <branch_name> to specify a branch."
+            print_usage
+            exit 1
+            ;;
     esac
     shift
 done
