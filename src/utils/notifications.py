@@ -672,8 +672,12 @@ class TelegramNotifier:
             balance_text = "\n".join(balance_lines)
 
             # Detect whether key metrics have changed since the last hourly report
-            # Snapshot: (open_positions, daily_pnl rounded to cents, USDT balance rounded to cents)
-            usdt_balance = round(float(balance_data.get('USDT', balance_data.get('BUSD', 0)) or 0), 2)
+            # Snapshot: (open_positions, daily_pnl rounded to cents, USDT/BUSD balance rounded to cents)
+            stable_balance_raw = balance_data.get('USDT') or balance_data.get('BUSD') or 0
+            try:
+                usdt_balance = round(float(stable_balance_raw), 2)
+            except (ValueError, TypeError, AttributeError):
+                usdt_balance = 0.0
             current_snapshot = (open_positions_count, round(daily_pnl, 2), usdt_balance)
             data_unchanged = (self._last_hourly_snapshot is not None
                               and current_snapshot == self._last_hourly_snapshot)
