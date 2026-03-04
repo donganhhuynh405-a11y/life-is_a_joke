@@ -745,8 +745,8 @@ class TradingBot:
                 monthly_roi = None
                 try:
                     start_balance = self.db.get_start_of_month_balance()
-                    usdt_val = balance_data.get('USDT')
-                    current_usdt = float(usdt_val if usdt_val is not None else balance_data.get('BUSD', 0))
+                    raw_stable_balance = balance_data.get('USDT') or balance_data.get('BUSD') or 0
+                    current_usdt = float(raw_stable_balance)
                     if start_balance and start_balance > 0 and current_usdt > 0:
                         monthly_roi = (current_usdt - start_balance) / start_balance * 100
                 except Exception as e:
