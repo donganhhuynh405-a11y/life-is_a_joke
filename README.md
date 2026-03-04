@@ -237,8 +237,8 @@ sudo systemctl restart trading-bot
 # Update to Latest Version
 cd /opt/Life_Is_A_Joke
 git fetch origin
-git checkout copilot/update-notification-format
-git pull origin copilot/update-notification-format
+git checkout main
+git pull origin main
 sudo systemctl restart trading-bot
 
 # Backup Database
