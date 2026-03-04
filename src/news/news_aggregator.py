@@ -251,25 +251,24 @@ class NewsAggregator:
                         news_items = []
 
                         for article in data.get('articles', []):
+                            source_name = article.get('source', {}).get('name', 'unknown')
                             news_item = {
-                                'news_id': self._generate_id(
-                                    article['url']), 'title': article.get(
-                                    'title', ''), 'content': article.get(
-                                    'description', '') or article.get(
-                                    'content', ''), 'url': article.get(
-                                    'url', ''), 'source': f"newsapi:{
-                                    article.get(
-                                        'source', {}).get(
-                                        'name', 'unknown')}", 'published_at': self._parse_date_to_iso(
-                                        article.get('publishedAt', '')), 'symbols': self._extract_symbols(
-                                            article.get(
-                                                'title', '') + ' ' + article.get(
-                                                    'description', '')), 'metadata': json.dumps(
-                                                        {
-                                                            'author': article.get(
-                                                                'author', ''), 'source_name': article.get(
-                                                                    'source', {}).get(
-                                                                        'name', '')})}
+                                'news_id': self._generate_id(article['url']),
+                                'title': article.get('title', ''),
+                                'content': (article.get('description', '')
+                                            or article.get('content', '')),
+                                'url': article.get('url', ''),
+                                'source': f"newsapi:{source_name}",
+                                'published_at': self._parse_date_to_iso(article.get('publishedAt', '')),
+                                'symbols': self._extract_symbols(
+                                    article.get('title', '') + ' '
+                                    + article.get('description', '')),
+                                'metadata': json.dumps({
+                                    'author': article.get('author', ''),
+                                    'source_name': article.get(
+                                        'source', {}).get('name', ''),
+                                }),
+                            }
                             news_items.append(news_item)
 
                         return news_items
@@ -430,10 +429,8 @@ class NewsAggregator:
 
             if saved_count > 0:
                 logger.info(
-                    f"Sentiment analysis: {
-                        sentiment_stats['bullish']} bullish, " f"{
-                        sentiment_stats['bearish']} bearish, {
-                        sentiment_stats['neutral']} neutral")
+                    f"Sentiment analysis: {sentiment_stats['bullish']} bullish, "
+                    f"{sentiment_stats['bearish']} bearish, {sentiment_stats['neutral']} neutral")
         except Exception as e:
             logger.error(f"Error saving news to database: {e}")
 

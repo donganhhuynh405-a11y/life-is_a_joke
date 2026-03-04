@@ -527,16 +527,14 @@ class AICommentaryGenerator:
                     sign = "profit" if monthly_pnl > 0 else "loss"
                     if abs(roi) <= 100:
                         parts.append(
-                            f"📅 <b>Monthly performance:</b> ${
-                                abs(monthly_pnl):,.2f} {sign} ({
-                                win_rate_30d:.0f}% win rate, ~{
-                                roi:+.1f}% ROI)")
+                            f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
+                            f"({win_rate_30d:.0f}% win rate, ~{roi:+.1f}% ROI)")
                     else:
                         # ROI > 100 % monthly is implausible — denominator (USDT only)
                         # is too small vs total portfolio; omit the % to avoid misleading.
                         parts.append(
-                            f"📅 <b>Monthly performance:</b> ${
-                                abs(monthly_pnl):,.2f} {sign} ({win_rate_30d:.0f}% win rate)")
+                            f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
+                            f"({win_rate_30d:.0f}% win rate)")
                 elif monthly_pnl > 0:
                     parts.append(
                         f"📅 <b>Monthly performance:</b> ${

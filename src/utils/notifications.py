@@ -859,48 +859,73 @@ class TelegramNotifier:
                 except Exception as e:
                     self.logger.error(f"Error formatting AI tactics: {e}")
 
-            # Add Strategy Adjustments — show only actionable items, not generic risk level
+            # Add Strategy Adjustments section if available
             if strategy_adjustments is not None:
                 self.logger.info(
                     f"📊 Displaying strategy adjustments in notification: {strategy_adjustments}")
                 try:
                     adjustments = strategy_adjustments.get('adjustments', {})
                     reasoning = strategy_adjustments.get('reasoning', [])
+                    risk_level = strategy_adjustments.get('risk_level', 'normal')
 
-                    # Only add this section when there are real adjustments or reasoning
-                    if adjustments or reasoning:
-                        message += "\n\n⚙️ <b>Strategy Adjustments:</b>\n"
+                    # Risk level emoji
+                    risk_emoji = {
+                        'very_low': '🟢',
+                        'low': '🟢',
+                        'normal': '🟡',
+                        'high': '🟠',
+                        'critical': '🔴'
+                    }.get(risk_level, '⚪')
 
-                        if adjustments:
-                            if 'position_size_multiplier' in adjustments:
-                                mult = adjustments['position_size_multiplier']
-                                message += f"  📊 Position Size: <b>{mult:.0%}</b>\n"
+                    # Translated risk level
+                    risk_level_text = {
+                        'very_low': self.t('risk_very_low', 'Very Low'),
+                        'low': self.t('risk_low', 'Low'),
+                        'normal': self.t('risk_normal', 'Normal'),
+                        'high': self.t('risk_high', 'High'),
+                        'critical': self.t('risk_critical', 'Critical')
+                    }.get(risk_level, risk_level)
 
-                            # Support both 'confidence_threshold_adjustment' (StrategyAdvisor)
-                            # and 'confidence_threshold' (AdaptiveTactics) key names
-                            if 'confidence_threshold_adjustment' in adjustments:
-                                base_conf = 50.0
-                                conf = base_conf + adjustments['confidence_threshold_adjustment']
-                                conf = max(30.0, min(95.0, conf))
-                                message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
-                            elif 'confidence_threshold' in adjustments:
-                                conf = adjustments['confidence_threshold'] * 100
-                                message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
+                    message += f"\n\n📊 <b>{self.t('strategy_status', 'AI Strategy Status')}:</b>\n"
 
-                            # Support both 'max_positions_multiplier' and 'max_positions'
-                            if 'max_positions_multiplier' in adjustments:
-                                base_max = 5
-                                max_pos = max(1, int(base_max * adjustments['max_positions_multiplier']))
-                                message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
-                            elif 'max_positions' in adjustments:
-                                max_pos = adjustments['max_positions']
-                                message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
+                    # Always show risk level
+                    message += f"  {risk_emoji} {self.t('risk_level', 'Risk Level')}: <b>{risk_level_text}</b>\n"
 
-                        # Always show reasoning if available (independent of adjustments)
-                        if reasoning and len(reasoning) > 0:
-                            message += "\n  <b>Reason:</b>\n"
-                            for reason in reasoning[:3]:
-                                message += f"  • {reason}\n"
+                    # Show adjustments section
+                    message += f"\n  <b>{self.t('adjustments', 'Current Adjustments')}:</b>\n"
+
+                    if adjustments:
+                        if 'position_size_multiplier' in adjustments:
+                            mult = adjustments['position_size_multiplier']
+                            message += f"  📊 Position Size: <b>{mult:.0%}</b>\n"
+
+                        # Support both 'confidence_threshold_adjustment' (StrategyAdvisor)
+                        # and 'confidence_threshold' (AdaptiveTactics) key names
+                        if 'confidence_threshold_adjustment' in adjustments:
+                            base_conf = 50.0
+                            conf = base_conf + adjustments['confidence_threshold_adjustment']
+                            conf = max(30.0, min(95.0, conf))
+                            message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
+                        elif 'confidence_threshold' in adjustments:
+                            conf = adjustments['confidence_threshold'] * 100
+                            message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
+
+                        # Support both 'max_positions_multiplier' and 'max_positions'
+                        if 'max_positions_multiplier' in adjustments:
+                            base_max = 5
+                            max_pos = max(1, int(base_max * adjustments['max_positions_multiplier']))
+                            message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
+                        elif 'max_positions' in adjustments:
+                            max_pos = adjustments['max_positions']
+                            message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
+                    else:
+                        message += f"  ✅ {self.t('optimal_conditions', 'Optimal trading conditions - no adjustments needed')}\n"
+
+                    # Always show reasoning if available (independent of adjustments)
+                    if reasoning and len(reasoning) > 0:
+                        message += f"\n  <b>{self.t('reasoning', 'Reasoning')}:</b>\n"
+                        for reason in reasoning[:3]:
+                            message += f"  • {reason}\n"
 
                 except Exception as e:
                     self.logger.error(f"Error formatting strategy adjustments: {e}")
