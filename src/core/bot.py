@@ -65,7 +65,7 @@ class TradingBot:
         self.logger.info("Strategy manager initialized")
 
         try:
-            from ml import AdaptiveTacticsManager
+            from mi import AdaptiveTacticsManager
             self.adaptive_tactics = AdaptiveTacticsManager(config, self.db, self.logger)
             self.logger.info("Adaptive tactics manager initialized")
         except Exception as e:
@@ -73,7 +73,7 @@ class TradingBot:
             self.adaptive_tactics = None
 
         try:
-            from ml.strategy_advisor import StrategyAdvisor
+            from mi.strategy_advisor import StrategyAdvisor
             config_dict = {
                 'ADAPTIVE_STRATEGY_ENABLED': config.get('ADAPTIVE_STRATEGY_ENABLED', True),
                 'ADAPTIVE_ADJUSTMENT_INTERVAL': config.get('ADAPTIVE_ADJUSTMENT_INTERVAL', 3600),
@@ -424,6 +424,13 @@ class TradingBot:
                 # Get daily P/L
                 daily_pnl = self.db.get_daily_profit_loss()
 
+                # Get daily trade count to show activity in hourly notification
+                try:
+                    daily_trades = self.db.get_daily_trade_count()
+                except Exception as e:
+                    self.logger.warning(f"Could not get daily trade count: {e}")
+                    daily_trades = None
+
                 # Analyze market trends
                 trends = None
                 try:
@@ -690,8 +697,22 @@ class TradingBot:
                         self.logger.error(f"Error fetching news: {e}", exc_info=True)
                         news_summary = None
 
+                # Collect ML model metrics for the notification
+                ml_status = self._collect_ml_status()
+
+                # Compute monthly ROI from balance snapshots
+                monthly_roi = None
+                try:
+                    start_balance = self.db.get_start_of_month_balance()
+                    usdt_val = balance_data.get('USDT')
+                    current_usdt = float(usdt_val if usdt_val is not None else balance_data.get('BUSD', 0))
+                    if start_balance and start_balance > 0 and current_usdt > 0:
+                        monthly_roi = (current_usdt - start_balance) / start_balance * 100
+                except Exception as e:
+                    self.logger.warning(f"Could not compute monthly ROI: {e}")
+
                 # Send notification with AI tactics info, trends, strategy adjustments,
-                # Elite AI data, and news
+                # Elite AI data, news, and ML model status
                 self.notifier.notify_hourly_summary(
                     open_positions_count=open_positions_count,
                     balance_data=balance_data,
@@ -700,7 +721,10 @@ class TradingBot:
                     trends=trends,
                     strategy_adjustments=strategy_adjustments,
                     elite_ai_data=self.elite_ai_data if hasattr(self, 'elite_ai_data') else None,
-                    news_summary=news_summary
+                    news_summary=news_summary,
+                    daily_trades=daily_trades,
+                    ml_status=ml_status,
+                    roi=monthly_roi
                 )
 
                 # Update last notification time
@@ -709,6 +733,44 @@ class TradingBot:
 
         except Exception as e:
             self.logger.error(f"Error sending hourly notification: {e}", exc_info=True)
+
+    def _collect_ml_status(self) -> dict:
+        """Read ML model metrics (accuracy, F1, training date) for all symbols.
+
+        Returns a dict keyed by symbol (e.g. 'BTCUSDT') with their metrics,
+        plus optional private keys '_training_active' and '_training_symbol'.
+        """
+        import json
+        from pathlib import Path
+
+        models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
+        result: dict = {}
+
+        if not models_dir.exists():
+            return result
+
+        try:
+            for symbol_dir in sorted(models_dir.iterdir()):
+                if not symbol_dir.is_dir():
+                    continue
+                metrics_path = symbol_dir / 'metrics.json'
+                if not metrics_path.exists():
+                    continue
+                try:
+                    with open(metrics_path, 'r') as f:
+                        metrics = json.load(f)
+                    result[symbol_dir.name] = {
+                        'accuracy': metrics.get('accuracy', 0),
+                        'f1_score': metrics.get('f1_score', 0),
+                        'train_samples': metrics.get('train_samples', 0),
+                        'training_date': metrics.get('training_date', ''),
+                    }
+                except Exception as exc:
+                    self.logger.debug(f"Could not read ML metrics for {symbol_dir.name}: {exc}")
+        except Exception as exc:
+            self.logger.warning(f"Could not scan ML models directory: {exc}")
+
+        return result
 
     def _health_check(self):
         """Perform internal health check"""
