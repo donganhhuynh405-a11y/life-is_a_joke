@@ -315,7 +315,10 @@ class NewsAggregator:
         return news_items
 
     def _parse_date_to_iso(self, date_str: str) -> str:
-        """Parse various date formats and return ISO 8601 UTC string for consistent DB storage/comparison"""
+        """Parse various date formats and return ISO 8601 UTC string for consistent DB storage/comparison.
+
+        Naive datetimes (no tzinfo) are assumed to already be UTC.
+        """
         if not date_str:
             return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         # Handle ISO 8601 formats including those with milliseconds/microseconds and
