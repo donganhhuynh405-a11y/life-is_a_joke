@@ -8,10 +8,12 @@ ML Training Pipeline
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional
 
 from .historical_data_fetcher import HistoricalDataFetcher
 from .market_specific_trainer import MarketSpecificTrainer, ModelMetrics
+from .training_progress import TrainingProgressTracker, DEFAULT_PROGRESS_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ class MLTrainingPipeline:
         timeframe: str = '1h',
         force_retrain: bool = False,
         models_dir: str = '/var/lib/trading-bot/models',
+        progress_file: Path = DEFAULT_PROGRESS_FILE,
     ):
         """
         Args:
@@ -36,6 +39,7 @@ class MLTrainingPipeline:
             timeframe: Таймфрейм для обучения
             force_retrain: Принудительное переобучение существующих моделей
             models_dir: Директория для хранения обученных моделей
+            progress_file: Path where live training progress JSON is written
         """
         self.exchange = exchange
         self.symbols = symbols
@@ -44,6 +48,12 @@ class MLTrainingPipeline:
 
         self.data_fetcher = HistoricalDataFetcher(exchange)
         self.trainer = MarketSpecificTrainer(models_dir=models_dir)
+
+        # Real-time progress tracker (written to disk at every step)
+        self.progress = TrainingProgressTracker(
+            symbols=symbols,
+            progress_file=progress_file,
+        )
 
         # Статистика обучения
         self.training_stats = {
@@ -72,37 +82,50 @@ class MLTrainingPipeline:
         logger.info("=" * 80)
 
         self.training_stats['started_at'] = datetime.now().isoformat()
+        self.progress.start()
 
-        for i, symbol in enumerate(self.symbols, 1):
-            logger.info(f"\n{'=' * 80}")
-            logger.info(f"📈 Processing {symbol} ({i}/{len(self.symbols)})")
-            logger.info(f"{'=' * 80}")
+        pipeline_failed = False
+        try:
+            for i, symbol in enumerate(self.symbols, 1):
+                logger.info(f"\n{'=' * 80}")
+                logger.info(f"📈 Processing {symbol} ({i}/{len(self.symbols)})")
+                logger.info(f"{'=' * 80}")
 
-            try:
-                result = await self.train_symbol(symbol)
+                try:
+                    result = await self.train_symbol(symbol)
 
-                if result:
-                    self.training_stats['successful'] += 1
+                    if result:
+                        self.training_stats['successful'] += 1
+                        self.training_stats['results'][symbol] = {
+                            'status': 'success',
+                            'metrics': result.to_dict() if isinstance(result, ModelMetrics) else result
+                        }
+                        self.progress.finish_symbol(
+                            symbol, status='success',
+                            metrics=result.to_dict() if isinstance(result, ModelMetrics) else result
+                        )
+                    else:
+                        self.training_stats['skipped'] += 1
+                        self.training_stats['results'][symbol] = {
+                            'status': 'skipped',
+                            'reason': 'Model already exists and force_retrain=False'
+                        }
+                        self.progress.finish_symbol(symbol, status='skipped')
+
+                except Exception as e:
+                    logger.error(f"❌ Failed to train {symbol}: {e}", exc_info=True)
+                    self.training_stats['failed'] += 1
                     self.training_stats['results'][symbol] = {
-                        'status': 'success',
-                        'metrics': result.to_dict() if isinstance(result, ModelMetrics) else result
+                        'status': 'failed',
+                        'error': str(e)
                     }
-                else:
-                    self.training_stats['skipped'] += 1
-                    self.training_stats['results'][symbol] = {
-                        'status': 'skipped',
-                        'reason': 'Model already exists and force_retrain=False'
-                    }
-
-            except Exception as e:
-                logger.error(f"❌ Failed to train {symbol}: {e}", exc_info=True)
-                self.training_stats['failed'] += 1
-                self.training_stats['results'][symbol] = {
-                    'status': 'failed',
-                    'error': str(e)
-                }
-
-        self.training_stats['completed_at'] = datetime.now().isoformat()
+                    self.progress.finish_symbol(symbol, status='failed', error=str(e))
+        except Exception as pipeline_exc:
+            logger.error("💥 Pipeline crashed: %s", pipeline_exc, exc_info=True)
+            pipeline_failed = True
+        finally:
+            self.training_stats['completed_at'] = datetime.now().isoformat()
+            self.progress.complete(failed=pipeline_failed)
 
         # Итоговый отчет
         self._print_summary()
@@ -138,6 +161,7 @@ class MLTrainingPipeline:
 
             # Загрузить исторические данные
             logger.info(f"📥 Fetching historical data for {symbol}...")
+            self.progress.begin_symbol(symbol, phase=TrainingProgressTracker.PHASE_FETCHING)
             df = await self.data_fetcher.fetch_full_history(
                 symbol=symbol,
                 timeframe=self.timeframe,
@@ -154,6 +178,7 @@ class MLTrainingPipeline:
 
             # Обучить модель
             logger.info(f"🎓 Training model for {symbol}...")
+            self.progress.begin_symbol(symbol, phase=TrainingProgressTracker.PHASE_TRAINING)
             metrics = self.trainer.train_model(
                 symbol=symbol,
                 df=df,
