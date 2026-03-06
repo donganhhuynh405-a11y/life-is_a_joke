@@ -1039,10 +1039,14 @@ class StrategyManager:
                             if parsed_price is not None and parsed_price > 0:
                                 exit_price = parsed_price
                         self.logger.info(
-                            f"Closed position {position['id']} on exchange: Order ID {order.get('orderId')}")
+                            f"Closed position {
+                                position['id']} on exchange: Order ID {
+                                order.get('orderId')}")
                     except Exception as e:
                         self.logger.error(
-                            f"Failed to close position {position['id']} on exchange: {str(e)}")
+                            f"Failed to close position {
+                                position['id']} on exchange: {
+                                str(e)}")
 
                 # If we still have no real exit price, fetch the current market price
                 if exit_price == entry_price:

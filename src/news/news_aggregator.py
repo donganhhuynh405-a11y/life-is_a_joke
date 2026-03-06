@@ -259,7 +259,7 @@ class NewsAggregator:
                                             or article.get('content', '')),
                                 'url': article.get('url', ''),
                                 'source': f"newsapi:{source_name}",
-                                'published_at': self._parse_date_to_iso(article.get('publishedAt', '')),
+                                'published_at': article.get('publishedAt', ''),
                                 'symbols': self._extract_symbols(
                                     article.get('title', '') + ' '
                                     + article.get('description', '')),
@@ -416,7 +416,7 @@ class NewsAggregator:
                         item['content'],
                         item['url'],
                         item['source'],
-                        item['published_at'],
+                        self._parse_date_to_iso(item['published_at']),
                         item['symbols'],
                         sentiment_score,
                         item.get('metadata', '')

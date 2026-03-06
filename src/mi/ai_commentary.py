@@ -559,27 +559,23 @@ class AICommentaryGenerator:
                 win_rate_30d = perf_30d.get('win_rate', 0)
                 profit_factor_30d = perf_30d.get('profit_factor', 0)
 
-                # Compute ROI from start-of-month USDT balance snapshot.
-                # The snapshot stores only the USDT balance (not the full portfolio
-                # which may include BTC/ETH/etc.), so ROI is only reliable when the
-                # snapshot is large relative to monthly_pnl (i.e., USDT was the dominant
-                # holding).  If ROI would exceed 100 % month-on-month, the denominator
-                # is almost certainly an under-representation of the actual portfolio —
-                # in that case, show just the absolute profit/loss without the % figure.
+                # Compute ROI from start-of-month USDT balance snapshot
                 start_balance = self._get_start_of_month_balance()
                 if monthly_pnl != 0 and start_balance:
                     roi = (monthly_pnl / start_balance) * 100
                     sign = "profit" if monthly_pnl > 0 else "loss"
-                    if abs(roi) <= 100:
-                        parts.append(
-                            f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
-                            f"({win_rate_30d:.0f}% win rate, ~{roi:+.1f}% ROI)")
-                    else:
-                        # ROI > 100 % monthly is implausible — denominator (USDT only)
-                        # is too small vs total portfolio; omit the % to avoid misleading.
-                        parts.append(
-                            f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
-                            f"({win_rate_30d:.0f}% win rate)")
+                    parts.append(
+                        f"📅 <b>Monthly performance:</b> ${
+                            abs(monthly_pnl):,.2f} {sign} ({
+                            win_rate_30d:.0f}% win rate, ~{
+                            roi:+.1f}% ROI)")
+                    # ROI > 100 % monthly is implausible — denominator (USDT only)
+                    # is too small vs total portfolio; omit the % to avoid misleading.
+                    if abs(roi) > 100:
+                        parts[-1] = (
+                            f"📅 <b>Monthly performance:</b> ${
+                                abs(monthly_pnl):,.2f} {sign} ({
+                                win_rate_30d:.0f}% win rate)")
                 elif monthly_pnl > 0:
                     parts.append(
                         f"📅 <b>Monthly performance:</b> ${monthly_pnl:,.2f} profit "
