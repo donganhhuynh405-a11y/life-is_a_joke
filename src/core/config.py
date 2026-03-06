@@ -104,6 +104,7 @@ class Config:
         self.app_dir = os.getenv('APP_DIR', '/opt/trading-bot')
         self.data_dir = os.getenv('DATA_DIR', '/var/lib/trading-bot')
         self.config_dir = os.getenv('CONFIG_DIR', '/etc/trading-bot')
+        self.models_dir = os.getenv('ML_MODELS_DIR', '/var/lib/trading-bot/models')
 
     def validate(self) -> bool:
         """Validate configuration"""

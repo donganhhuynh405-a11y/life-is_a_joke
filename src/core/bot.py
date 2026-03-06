@@ -34,6 +34,8 @@ class TradingBot:
         self.last_hourly_notification = None
         self.news_aggregator_thread = None
         self.news_aggregator_loop = None
+        self.ml_training_thread = None
+        self.ml_training_loop = None
 
         if not config.validate():
             raise ValueError("Invalid configuration")
@@ -210,6 +212,85 @@ class TradingBot:
 
         self.logger.info("Trading bot initialization complete")
 
+    def _start_ml_training_background(self):
+        """Start ML model training in a background thread with its own event loop.
+
+        Training runs once at startup (skipping symbols that already have up-to-date
+        models), then repeats every 7 days so models stay fresh.
+        """
+        models_dir = self.config.models_dir
+        symbols = self.config.trading_symbols
+
+        def run_ml_training():
+            """Async training loop executed in a dedicated background thread."""
+            try:
+                self.logger.info("=" * 70)
+                self.logger.info("🤖 STARTING ML TRAINING BACKGROUND TASK...")
+                self.logger.info("=" * 70)
+
+                self.ml_training_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.ml_training_loop)
+
+                from mi.training_pipeline import MLTrainingPipeline
+
+                # Retrain interval: every 7 days (in seconds)
+                retrain_interval_secs = 7 * 24 * 3600
+
+                # Create once; recreated only when the loop restarts after retraining
+                pipeline = MLTrainingPipeline(
+                    exchange=self.exchange,
+                    symbols=symbols,
+                    timeframe='1h',
+                    force_retrain=False,
+                    models_dir=models_dir,
+                )
+
+                while self.running:
+                    try:
+                        self.ml_training_loop.run_until_complete(pipeline.train_all_symbols())
+                        self.logger.info("✅ ML training cycle complete")
+                    except Exception as exc:
+                        self.logger.error(f"❌ ML training cycle error: {exc}", exc_info=True)
+
+                    # Wait for next cycle (check every minute so we can exit cleanly)
+                    waited = 0
+                    while self.running and waited < retrain_interval_secs:
+                        time.sleep(60)
+                        waited += 60
+
+                    # Reset stats for the next retraining cycle
+                    if self.running:
+                        pipeline = MLTrainingPipeline(
+                            exchange=self.exchange,
+                            symbols=symbols,
+                            timeframe='1h',
+                            force_retrain=False,
+                            models_dir=models_dir,
+                        )
+
+            except Exception as exc:
+                self.logger.error(
+                    f"❌ Fatal error in ML training background thread: {exc}",
+                    exc_info=True)
+            finally:
+                if self.ml_training_loop:
+                    self.ml_training_loop.close()
+
+        self.ml_training_thread = threading.Thread(
+            target=run_ml_training,
+            name='ml-training',
+            daemon=True,
+        )
+        self.ml_training_thread.start()
+        self.logger.info("✅ ML training thread started")
+
+    def _stop_ml_training_background(self):
+        """Signal the ML training thread to stop (it checks self.running)."""
+        if self.ml_training_thread and self.ml_training_thread.is_alive():
+            self.logger.info("Stopping ML training thread...")
+            # self.running is already False at this point; the thread will exit
+            # on its next 60-second sleep tick.
+
     def _start_news_aggregator_background(self):
         """Start news aggregator in a background thread with its own event loop"""
         if not self.news_aggregator:
@@ -280,6 +361,9 @@ class TradingBot:
         # Start news aggregator background task
         self._start_news_aggregator_background()
 
+        # Start ML model training background task
+        self._start_ml_training_background()
+
         # Send startup notification
         if self.notifier:
             self.notifier.notify_bot_started(
@@ -343,6 +427,9 @@ class TradingBot:
 
         # Stop news aggregator
         self._stop_news_aggregator_background()
+
+        # Stop ML training thread
+        self._stop_ml_training_background()
 
         # Send shutdown notification
         if hasattr(self, 'notifier') and self.notifier:
@@ -778,7 +865,7 @@ class TradingBot:
         from pathlib import Path
         from datetime import datetime
 
-        models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
+        models_dir = Path(self.config.models_dir)
         result: dict = {}
 
         # ── Training-in-progress detection ────────────────────────────────────

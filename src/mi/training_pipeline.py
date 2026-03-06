@@ -26,7 +26,8 @@ class MLTrainingPipeline:
         exchange,
         symbols: List[str],
         timeframe: str = '1h',
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        models_dir: str = '/var/lib/trading-bot/models',
     ):
         """
         Args:
@@ -34,6 +35,7 @@ class MLTrainingPipeline:
             symbols: Список торговых символов
             timeframe: Таймфрейм для обучения
             force_retrain: Принудительное переобучение существующих моделей
+            models_dir: Директория для хранения обученных моделей
         """
         self.exchange = exchange
         self.symbols = symbols
@@ -41,7 +43,7 @@ class MLTrainingPipeline:
         self.force_retrain = force_retrain
 
         self.data_fetcher = HistoricalDataFetcher(exchange)
-        self.trainer = MarketSpecificTrainer()
+        self.trainer = MarketSpecificTrainer(models_dir=models_dir)
 
         # Статистика обучения
         self.training_stats = {
@@ -272,7 +274,12 @@ class MLTrainingPipeline:
         return "\n".join(report)
 
 
-async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool = False) -> Dict:
+async def initialize_ml_system(
+    exchange,
+    symbols: List[str],
+    force_retrain: bool = False,
+    models_dir: str = '/var/lib/trading-bot/models',
+) -> Dict:
     """
     Инициализировать ML систему: загрузить данные и обучить модели
 
@@ -280,6 +287,7 @@ async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool
         exchange: ExchangeAdapter instance
         symbols: Список торговых символов
         force_retrain: Принудительное переобучение
+        models_dir: Директория для хранения обученных моделей
 
     Returns:
         Dict со статистикой обучения
@@ -288,7 +296,8 @@ async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool
         exchange=exchange,
         symbols=symbols,
         timeframe='1h',
-        force_retrain=force_retrain
+        force_retrain=force_retrain,
+        models_dir=models_dir,
     )
 
     stats = await pipeline.train_all_symbols()
