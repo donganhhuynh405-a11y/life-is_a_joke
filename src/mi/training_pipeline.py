@@ -273,6 +273,73 @@ class MLTrainingPipeline:
 
         return "\n".join(report)
 
+    # ------------------------------------------------------------------
+    # Incremental fine-tuning from live trade outcomes
+    # ------------------------------------------------------------------
+
+    async def fine_tune_from_trades(
+        self,
+        trade_records: List[Dict],
+    ) -> Dict:
+        """
+        Fine-tune pre-trained models with the outcomes of recent bot trades.
+
+        This is the "layer-on-top" step: after the historical foundation is
+        trained, every closed trade yields a verified signal (direction +
+        outcome) that is used to nudge the model toward real market behaviour.
+
+        Args:
+            trade_records: List of dicts, each containing:
+                'symbol'   — e.g. 'BTCUSDT'
+                'side'     — 'BUY' or 'SELL'
+                'pnl'      — realised profit/loss in USDT
+                'entry_df' — pd.DataFrame with OHLCV up to entry (≥ lookback rows)
+
+        Returns:
+            Dict with per-symbol fine-tune results.
+        """
+        results: Dict[str, str] = {}
+
+        for record in trade_records:
+            symbol = record.get('symbol')
+            if not symbol:
+                continue
+
+            side = record.get('side', '').upper()
+            pnl = float(record.get('pnl', 0))
+            entry_df = record.get('entry_df')
+
+            if entry_df is None or not isinstance(entry_df, object):
+                results[symbol] = 'skipped: no entry_df'
+                continue
+
+            # Map trade outcome to the model's target space (UP=1 / DOWN=-1 / HOLD=0).
+            # The target represents the ACTUAL correct direction:
+            #   profitable BUY → price went UP   → correct direction was 1
+            #   profitable SELL → price went DOWN → correct direction was -1
+            #   losing BUY → price went DOWN → correct direction was -1
+            #   losing SELL → price went UP → correct direction was 1
+            #   breakeven → no clear signal → 0
+            if pnl > 0 and side == 'BUY':
+                outcome = 1      # Price moved UP — long was correct
+            elif pnl > 0 and side == 'SELL':
+                outcome = -1     # Price moved DOWN — short was correct
+            elif pnl < 0 and side == 'BUY':
+                outcome = -1     # Price moved DOWN — long was wrong
+            elif pnl < 0 and side == 'SELL':
+                outcome = 1      # Price moved UP — short was wrong
+            else:
+                outcome = 0      # Breakeven / uncertain
+
+            ok = self.trainer.fine_tune_from_trade(
+                symbol=symbol,
+                recent_df=entry_df,
+                trade_outcome=outcome,
+            )
+            results[symbol] = 'updated' if ok else 'failed'
+
+        return results
+
 
 async def initialize_ml_system(
     exchange,
