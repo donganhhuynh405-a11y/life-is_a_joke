@@ -23,7 +23,7 @@ echo ""
 
 # Default paths
 DEFAULT_ENV_FILE="/etc/trading-bot/.env"
-TEMPLATE_FILE="${HOME}/trading-bot-setup/life_is_a_joke/.env.template"
+TEMPLATE_FILE="/opt/trading-bot/.env.template"
 
 # Allow custom paths
 ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
@@ -131,7 +131,7 @@ echo -e "${YELLOW}🔄 Для применения изменений:${NC}"
 echo "   sudo systemctl restart trading-bot"
 echo ""
 echo -e "${YELLOW}📖 Полная документация:${NC}"
-echo "   ~/trading-bot-setup/life_is_a_joke/BOT_CONFIGURATION_GUIDE.md"
+echo "   /opt/trading-bot/BOT_CONFIGURATION_GUIDE.md"
 echo ""
 echo -e "${GREEN}✅ Готово!${NC}"
 echo ""

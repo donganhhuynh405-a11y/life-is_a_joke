@@ -24,9 +24,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git"
-REPO_DIR="$HOME/trading-bot-setup/life_is_a_joke"
-BOT_DIR="/opt/Life_Is_A_Joke"
+REPO_URL="https://github.com/donganhhuynh405-a11y/life-is_a_joke.git"
+REPO_DIR="/opt/trading-bot"
+BOT_DIR="/opt/trading-bot"
 SERVICE_NAME="trading-bot"
 BRANCH="main"  # Default to stable branch; override with --branch for PR/feature branches
 
@@ -103,7 +103,7 @@ print_status "Checking repository directory: $REPO_DIR"
 if [ ! -d "$REPO_DIR" ]; then
     print_warning "Repository directory not found, cloning it..."
     mkdir -p "$(dirname "$REPO_DIR")"
-    git clone "$REPO_URL" "$REPO_DIR"
+    git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
     print_success "Repository cloned successfully"
 fi
 
@@ -128,16 +128,11 @@ print_status "Pulling latest changes..."
 git pull origin "$BRANCH"
 print_success "Repository updated to latest version"
 
-# Step 6: Copy files to bot directory
-print_status "Copying updated files to bot directory: $BOT_DIR"
-if [ ! -d "$BOT_DIR" ]; then
-    print_warning "Bot directory doesn't exist, creating it..."
-    mkdir -p "$BOT_DIR"
-fi
-
-# Copy all files except .git directory
-rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$REPO_DIR/" "$BOT_DIR/"
-print_success "Files copied successfully"
+# Step 6: Clean Python cache files
+print_status "Cleaning Python cache files..."
+find "$BOT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+find "$BOT_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
+print_success "Cache files cleaned"
 
 # Step 7: Set correct ownership
 print_status "Setting correct file ownership..."
@@ -149,15 +144,8 @@ else
     print_warning "If you have a different user for the bot, please update manually"
 fi
 
-# Step 8: Clean up Python cache files
-print_status "Cleaning up Python cache files..."
-find "$BOT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-find "$BOT_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
-print_success "Cache files cleaned"
-
-# Step 9: Show git commit info
+# Step 8: Show git commit info
 print_status "Current version information:"
-cd "$REPO_DIR"
 COMMIT_HASH=$(git rev-parse --short HEAD)
 COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
 COMMIT_DATE=$(git log -1 --pretty=%ci)
@@ -165,7 +153,7 @@ echo "  Commit: $COMMIT_HASH"
 echo "  Message: $COMMIT_MSG"
 echo "  Date: $COMMIT_DATE"
 
-# Step 10: Start the trading bot service
+# Step 9: Start the trading bot service
 print_status "Starting trading bot service..."
 systemctl start "$SERVICE_NAME"
 
@@ -182,7 +170,7 @@ else
     exit 1
 fi
 
-# Step 11: Show service status
+# Step 10: Show service status
 print_status "Service status:"
 systemctl status "$SERVICE_NAME" --no-pager -l | head -n 15
 

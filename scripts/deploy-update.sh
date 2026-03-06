@@ -33,7 +33,7 @@ fi
 # Check if in trading-bot directory
 if [ ! -f "requirements.txt" ]; then
     print_error "Not in trading-bot directory"
-    print_info "Run: cd /opt/Life_Is_A_Joke && sudo bash scripts/deploy-update.sh"
+    print_info "Run: cd /opt/trading-bot && sudo bash scripts/deploy-update.sh"
     exit 1
 fi
 
