@@ -43,7 +43,7 @@ class AdaptiveTacticsManager:
 
         try:
             # Get recent performance (7 days and 30 days)
-            from ml import TradeAnalyzer, PerformanceAnalyzer
+            from mi import TradeAnalyzer, PerformanceAnalyzer
 
             analyzer = TradeAnalyzer(db_path=self.db_path)
             perf_analyzer = PerformanceAnalyzer(db_path=self.db_path)
@@ -196,7 +196,7 @@ class AdaptiveTacticsManager:
         adjustments = []
 
         try:
-            from ml import TradeAnalyzer
+            from mi import TradeAnalyzer
             analyzer = TradeAnalyzer(self.database, self.logger)
 
             symbol_perf = analyzer.get_performance_by_symbol(days=30)

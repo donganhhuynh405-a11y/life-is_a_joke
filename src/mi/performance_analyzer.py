@@ -161,6 +161,8 @@ class PerformanceAnalyzer:
             'max_drawdown_pct': drawdown['max_drawdown_pct'],
             'max_win_streak': streaks['max_win_streak'],
             'max_loss_streak': streaks['max_loss_streak'],
-            'current_streak': streaks['current_streak'],
-            'current_streak_type': streaks['current_streak_type']
+            'current_streak': {
+                'type': streaks['current_streak_type'],
+                'count': streaks['current_streak']
+            }
         }

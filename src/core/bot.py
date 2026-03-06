@@ -65,7 +65,7 @@ class TradingBot:
         self.logger.info("Strategy manager initialized")
 
         try:
-            from ml import AdaptiveTacticsManager
+            from mi import AdaptiveTacticsManager
             self.adaptive_tactics = AdaptiveTacticsManager(config, self.db, self.logger)
             self.logger.info("Adaptive tactics manager initialized")
         except Exception as e:
@@ -73,7 +73,7 @@ class TradingBot:
             self.adaptive_tactics = None
 
         try:
-            from ml.strategy_advisor import StrategyAdvisor
+            from mi.strategy_advisor import StrategyAdvisor
             config_dict = {
                 'ADAPTIVE_STRATEGY_ENABLED': config.get('ADAPTIVE_STRATEGY_ENABLED', True),
                 'ADAPTIVE_ADJUSTMENT_INTERVAL': config.get('ADAPTIVE_ADJUSTMENT_INTERVAL', 3600),
@@ -424,6 +424,13 @@ class TradingBot:
                 # Get daily P/L
                 daily_pnl = self.db.get_daily_profit_loss()
 
+                # Get daily trade count to show activity in hourly notification
+                try:
+                    daily_trades = self.db.get_daily_trade_count()
+                except Exception as e:
+                    self.logger.warning(f"Could not get daily trade count: {e}")
+                    daily_trades = None
+
                 # Analyze market trends
                 trends = None
                 try:
@@ -469,23 +476,27 @@ class TradingBot:
                             'trend_summary': ''
                         }
                         if trends:
-                            # Calculate average trend strength
+                            # trends is a dict: {symbol: trend_info_dict}
                             trend_strengths = []
-                            for symbol_data in trends.get('symbols', []):
-                                trend_strengths.append(abs(symbol_data.get('trend_strength', 0)))
+                            for symbol, trend_info in trends.items():
+                                strength = trend_info.get('strength')
+                                if strength is None:
+                                    self.logger.warning(f"Trend info for {symbol} missing 'strength' key")
+                                    strength = 0
+                                trend_strengths.append(abs(strength))
 
                             if trend_strengths:
                                 avg_strength = sum(trend_strengths) / len(trend_strengths)
-                                market_data['avg_volatility'] = avg_strength
+                                # strength is 0-1 scale; convert to 0-100 for comparison
+                                avg_strength_pct = avg_strength * 100
+                                market_data['avg_volatility'] = avg_strength_pct
 
-                                if avg_strength > 70:
+                                if avg_strength_pct > 70:
                                     market_data['trend_strength'] = 'strong'
-                                elif avg_strength < 40:
+                                elif avg_strength_pct < 40:
                                     market_data['trend_strength'] = 'weak'
 
-                            market_data['trend_summary'] = trends.get('summary', '')
-
-                        # Prepare performance data
+                        # Prepare performance data using PerformanceAnalyzer for real metrics
                         performance_data = {
                             'daily_pnl': daily_pnl,
                             'weekly_pnl': 0,
@@ -494,15 +505,27 @@ class TradingBot:
                             'sharpe_ratio': 0
                         }
 
-                        # Get performance metrics from database
+                        # Get performance metrics from database and PerformanceAnalyzer
                         try:
                             metrics = self.db.get_performance_metrics()
                             if metrics:
-                                performance_data['weekly_pnl'] = metrics.get('weekly_pnl', 0)
                                 performance_data['win_rate'] = metrics.get('win_rate', 50)
-                                performance_data['max_drawdown_pct'] = metrics.get(
-                                    'max_drawdown_pct', 0)
-                                performance_data['sharpe_ratio'] = metrics.get('sharpe_ratio', 0)
+
+                            # Use PerformanceAnalyzer for sharpe, drawdown, weekly pnl
+                            try:
+                                from mi import TradeAnalyzer, PerformanceAnalyzer
+                                trade_analyzer = TradeAnalyzer(db_path=self.config.db_path)
+                                perf_analyzer = PerformanceAnalyzer(db_path=self.config.db_path)
+                                perf_7d = trade_analyzer.analyze_performance(days=7)
+                                adv_metrics = perf_analyzer.get_performance_summary()
+                                if perf_7d:
+                                    performance_data['weekly_pnl'] = perf_7d.get('total_pnl', 0)
+                                    performance_data['win_rate'] = perf_7d.get('win_rate', performance_data['win_rate'])
+                                if adv_metrics:
+                                    performance_data['max_drawdown_pct'] = adv_metrics.get('max_drawdown_pct', 0)
+                                    performance_data['sharpe_ratio'] = adv_metrics.get('sharpe_ratio', 0)
+                            except Exception as e:
+                                self.logger.warning(f"Could not get advanced performance metrics: {e}")
                         except Exception as e:
                             self.logger.warning(f"Could not get performance metrics: {e}")
 
@@ -531,6 +554,8 @@ class TradingBot:
                                 if hasattr(self.strategy_manager, 'apply_strategy_adjustments'):
                                     self.strategy_manager.apply_strategy_adjustments(
                                         advice['adjustments'])
+                                else:
+                                    self.logger.warning("apply_strategy_adjustments not available on strategy_manager")
                             except Exception as apply_error:
                                 self.logger.error(
                                     f"Error applying strategy adjustments: {apply_error}")
@@ -690,8 +715,22 @@ class TradingBot:
                         self.logger.error(f"Error fetching news: {e}", exc_info=True)
                         news_summary = None
 
+                # Collect ML model metrics for the notification
+                ml_status = self._collect_ml_status()
+
+                # Compute monthly ROI from balance snapshots
+                monthly_roi = None
+                try:
+                    start_balance = self.db.get_start_of_month_balance()
+                    raw_stable_balance = balance_data.get('USDT') or balance_data.get('BUSD') or 0
+                    current_usdt = float(raw_stable_balance)
+                    if start_balance and start_balance > 0 and current_usdt > 0:
+                        monthly_roi = (current_usdt - start_balance) / start_balance * 100
+                except Exception as e:
+                    self.logger.warning(f"Could not compute monthly ROI: {e}")
+
                 # Send notification with AI tactics info, trends, strategy adjustments,
-                # Elite AI data, and news
+                # Elite AI data, news, and ML model status
                 self.notifier.notify_hourly_summary(
                     open_positions_count=open_positions_count,
                     balance_data=balance_data,
@@ -700,7 +739,10 @@ class TradingBot:
                     trends=trends,
                     strategy_adjustments=strategy_adjustments,
                     elite_ai_data=self.elite_ai_data if hasattr(self, 'elite_ai_data') else None,
-                    news_summary=news_summary
+                    news_summary=news_summary,
+                    daily_trades=daily_trades,
+                    ml_status=ml_status,
+                    roi=monthly_roi
                 )
 
                 # Update last notification time
@@ -709,6 +751,45 @@ class TradingBot:
 
         except Exception as e:
             self.logger.error(f"Error sending hourly notification: {e}", exc_info=True)
+
+    def _collect_ml_status(self) -> dict:
+        """Read ML model metrics (accuracy, F1, training date) for all symbols.
+
+        Returns a dict keyed by symbol (e.g. 'BTCUSDT') with their metrics,
+        plus optional private keys '_training_active' and '_training_symbol'.
+        """
+        import json
+        import os
+        from pathlib import Path
+
+        models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
+        result: dict = {}
+
+        if not models_dir.exists():
+            return result
+
+        try:
+            for symbol_dir in sorted(models_dir.iterdir()):
+                if not symbol_dir.is_dir():
+                    continue
+                metrics_path = symbol_dir / 'metrics.json'
+                if not metrics_path.exists():
+                    continue
+                try:
+                    with open(metrics_path, 'r') as f:
+                        metrics = json.load(f)
+                    result[symbol_dir.name] = {
+                        'accuracy': metrics.get('accuracy', 0),
+                        'f1_score': metrics.get('f1_score', 0),
+                        'train_samples': metrics.get('train_samples', 0),
+                        'training_date': metrics.get('training_date', ''),
+                    }
+                except Exception as exc:
+                    self.logger.debug(f"Could not read ML metrics for {symbol_dir.name}: {exc}")
+        except Exception as exc:
+            self.logger.warning(f"Could not scan ML models directory: {exc}")
+
+        return result
 
     def _health_check(self):
         """Perform internal health check"""

@@ -576,6 +576,17 @@ class AICommentaryGenerator:
                         f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss "
                         f"({win_rate_30d:.0f}% win rate)")
 
+                # Guard: if the appended ROI is implausible (> 100 % MoM the
+                # USDT-only snapshot understates the full portfolio), replace
+                # the last message with one that omits the misleading figure.
+                if (monthly_pnl != 0 and start_balance
+                        and abs((monthly_pnl / start_balance) * 100) > 100
+                        and parts):
+                    _sign = "profit" if monthly_pnl > 0 else "loss"
+                    parts[-1] = (
+                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {_sign} "
+                        f"({win_rate_30d:.0f}% win rate)")
+
                 if profit_factor_30d and profit_factor_30d > 0:
                     if profit_factor_30d > 2.5:
                         parts.append(

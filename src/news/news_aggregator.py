@@ -5,11 +5,12 @@ Collects news from multiple sources and stores them for analysis
 import asyncio
 import aiohttp
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 import sqlite3
 import json
 import hashlib
+from email.utils import parsedate_to_datetime
 from news.news_sentiment_analyzer import NewsSentimentAnalyzer
 
 logger = logging.getLogger('bot.news_aggregator')
@@ -89,6 +90,16 @@ class NewsAggregator:
                 )
             ''')
 
+            # Schema migration: add fetched_at if this is an older table that lacks it.
+            # CREATE TABLE IF NOT EXISTS never modifies an existing table, so we must
+            # ALTER TABLE explicitly.  SQLite does not support ADD COLUMN IF NOT EXISTS,
+            # so we catch the OperationalError raised when the column already exists.
+            try:
+                cursor.execute('ALTER TABLE crypto_news ADD COLUMN fetched_at TIMESTAMP')
+                logger.info("Migrated crypto_news: added fetched_at column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists — no action needed
+
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_news_published
                 ON crypto_news(published_at DESC)
@@ -130,7 +141,10 @@ class NewsAggregator:
 
     async def _aggregation_loop(self):
         """Main aggregation loop"""
-        # Analyze existing news on first run
+        # On first run: analyze existing news and purge entries whose
+        # published_at was corrupted by the old date-parsing bug
+        # (it stored datetime.now() instead of the article's real date).
+        await self._purge_corrupted_news()
         await self._analyze_existing_news()
 
         while self.running:
@@ -194,7 +208,7 @@ class NewsAggregator:
                                 'content': item.get('title', ''),
                                 'url': item.get('url', ''),
                                 'source': 'cryptopanic',
-                                'published_at': item.get('published_at', ''),
+                                'published_at': self._parse_date_to_iso(item.get('published_at', '')),
                                 'symbols': ','.join([c['code'] for c in item.get('currencies', [])]),
                                 'metadata': json.dumps({
                                     'votes': item.get('votes', {}),
@@ -287,7 +301,8 @@ class NewsAggregator:
                         'content': entry.get('summary', '') or entry.get('description', ''),
                         'url': entry.get('link', ''),
                         'source': f"rss:{feed.feed.get('title', feed_url)}",
-                        'published_at': entry.get('published', entry.get('updated', '')),
+                        'published_at': self._parse_date_to_iso(
+                            entry.get('published', entry.get('updated', ''))),
                         'symbols': self._extract_symbols(entry.get('title', '') + ' ' + entry.get('summary', '')),
                         'metadata': json.dumps({
                             'feed_url': feed_url
@@ -298,6 +313,39 @@ class NewsAggregator:
                 logger.error(f"Error fetching RSS feed {feed_url}: {e}")
 
         return news_items
+
+    def _parse_date_to_iso(self, date_str: str) -> str:
+        """Parse various date formats and return ISO 8601 UTC string for consistent DB storage/comparison.
+
+        Naive datetimes (no tzinfo) are assumed to already be UTC.
+        """
+        if not date_str:
+            return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        # Handle ISO 8601 formats including those with milliseconds/microseconds and
+        # timezone offsets (e.g. "2026-02-25T12:30:00.000Z", "2026-02-25T12:30:00+00:00").
+        # datetime.fromisoformat() handles all ISO variants; replace 'Z' for compat.
+        if date_str and date_str[0].isdigit():
+            try:
+                normalized = date_str.replace('Z', '+00:00')
+                dt = datetime.fromisoformat(normalized)
+                # If datetime is naive (no tzinfo), assume it is already in UTC.
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                dt_utc = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                return dt_utc.strftime('%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                pass
+        # Try RFC 2822 format (used by RSS feeds, e.g. "Mon, 25 Feb 2026 12:00:00 +0000")
+        try:
+            dt = parsedate_to_datetime(date_str)
+            # Convert to UTC and strip timezone info for consistent storage
+            dt_utc = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt_utc.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            pass
+        # Fallback: current time
+        logger.warning(f"Could not parse date: {date_str!r}, using current time")
+        return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
     def _generate_id(self, url: str) -> str:
         """Generate unique ID for news item"""
@@ -368,7 +416,7 @@ class NewsAggregator:
                         item['content'],
                         item['url'],
                         item['source'],
-                        item['published_at'],
+                        self._parse_date_to_iso(item['published_at']),
                         item['symbols'],
                         sentiment_score,
                         item.get('metadata', '')
@@ -391,13 +439,54 @@ class NewsAggregator:
 
         return saved_count
 
+    async def _purge_corrupted_news(self):
+        """Detect and clear a corrupted news cache.
+
+        The old _parse_date_to_iso() fell back to datetime.now() when it could
+        not parse a date string, so published_at was stored as the fetch time
+        rather than the article's real publication date.  This makes all cached
+        articles appear as "just published" on every query.
+
+        We detect this symptom by checking whether the count of articles whose
+        published_at falls within the last hour is implausibly high (>50).
+        A realistic volume from all configured sources is at most ~40 articles
+        per hour, so anything above 50 is a clear sign of corruption.
+
+        When detected, the whole table is cleared so the next fetch can
+        re-populate it with correct publication dates.
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cursor = conn.cursor()
+
+                cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+                cursor.execute(
+                    'SELECT COUNT(*) FROM crypto_news WHERE published_at >= ?', (cutoff,)
+                )
+                recent_count = cursor.fetchone()[0]
+
+                if recent_count > 50:
+                    cursor.execute('DELETE FROM crypto_news')
+                    deleted = cursor.rowcount
+                    conn.commit()
+                    logger.info(
+                        f"Detected {recent_count} articles in last hour (expected <=50 — "
+                        "published_at dates were corrupted by old date-parsing bug). "
+                        f"Cleared {deleted} cached news entries; will rebuild with correct dates."
+                    )
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.error(f"Error purging corrupted news: {e}")
+
     async def _cleanup_old_news(self):
         """Remove news older than 7 days"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            cutoff_date = (datetime.now() - timedelta(days=7)).isoformat()
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute('''
                 DELETE FROM crypto_news
                 WHERE published_at < ?
@@ -456,7 +545,7 @@ class NewsAggregator:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cutoff_date = (datetime.now() - timedelta(hours=hours)).isoformat()
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
 
             if symbol:
                 cursor.execute('''

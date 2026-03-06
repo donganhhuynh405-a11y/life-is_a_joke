@@ -6,7 +6,7 @@
 
 set -e
 
-BOT_DIR="/opt/trading-bot"
+BOT_DIR="/opt/Life_Is_A_Joke"
 ALIAS_NAME="bot-help"
 ALIAS_COMMAND="python3 $BOT_DIR/scripts/bot_help.py"
 

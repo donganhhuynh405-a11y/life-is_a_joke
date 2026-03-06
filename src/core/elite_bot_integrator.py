@@ -6,10 +6,10 @@ import logging
 import os
 import numpy as np
 from typing import Dict, Optional
-from ml.advanced_risk_manager import AdvancedRiskManager
-from ml.market_regime_detector import MarketRegimeDetector
-from ml.multi_timeframe_analyzer import MultiTimeframeAnalyzer
-from ml.elite_position_manager import ElitePositionManager
+from mi.advanced_risk_manager import AdvancedRiskManager
+from mi.market_regime_detector import MarketRegimeDetector
+from mi.multi_timeframe_analyzer import MultiTimeframeAnalyzer
+from mi.elite_position_manager import ElitePositionManager
 
 logger = logging.getLogger(__name__)
 

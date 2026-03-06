@@ -35,35 +35,35 @@ echo ""
 print_info "Step 2/6: Analyzing current situation..."
 cd /opt
 
-if [ -d "trading-bot" ]; then
-    print_info "   Found: /opt/trading-bot"
+if [ -d "Life_Is_A_Joke" ]; then
+    print_info "   Found: /opt/Life_Is_A_Joke"
 fi
 
-if [ -d "trading-bot.backup" ]; then
-    print_info "   Found: /opt/trading-bot.backup"
+if [ -d "Life_Is_A_Joke.backup" ]; then
+    print_info "   Found: /opt/Life_Is_A_Joke.backup"
 fi
 
 # Check for incomplete clone
-if [ -d "trading-bot" ] && [ ! -f "trading-bot/requirements.txt" ]; then
-    print_warning "   trading-bot directory is incomplete (failed clone)"
+if [ -d "Life_Is_A_Joke" ] && [ ! -f "Life_Is_A_Joke/requirements.txt" ]; then
+    print_warning "   Life_Is_A_Joke directory is incomplete (failed clone)"
 fi
 echo ""
 
 # Step 3: Clean up failed deployment
 print_info "Step 3/6: Cleaning up failed deployment..."
 
-# Remove incomplete trading-bot if it exists
-if [ -d "trading-bot" ] && [ ! -f "trading-bot/requirements.txt" ]; then
-    print_info "   Removing incomplete trading-bot..."
-    sudo rm -rf trading-bot
+# Remove incomplete Life_Is_A_Joke if it exists
+if [ -d "Life_Is_A_Joke" ] && [ ! -f "Life_Is_A_Joke/requirements.txt" ]; then
+    print_info "   Removing incomplete Life_Is_A_Joke..."
+    sudo rm -rf Life_Is_A_Joke
     print_info "   ✅ Removed"
 fi
 
-# If trading-bot exists and is complete, create backup with timestamp
-if [ -d "trading-bot" ] && [ -f "trading-bot/requirements.txt" ]; then
+# If Life_Is_A_Joke exists and is complete, create backup with timestamp
+if [ -d "Life_Is_A_Joke" ] && [ -f "Life_Is_A_Joke/requirements.txt" ]; then
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    print_info "   Creating backup: trading-bot.backup.$TIMESTAMP"
-    sudo mv trading-bot "trading-bot.backup.$TIMESTAMP"
+    print_info "   Creating backup: Life_Is_A_Joke.backup.$TIMESTAMP"
+    sudo mv Life_Is_A_Joke "Life_Is_A_Joke.backup.$TIMESTAMP"
     print_info "   ✅ Backup created"
 fi
 echo ""
@@ -73,7 +73,7 @@ print_info "Step 4/6: Preparing for fresh deployment..."
 cd /opt
 
 # Find the most recent backup to restore .env from
-LATEST_BACKUP=$(ls -td trading-bot.backup* 2>/dev/null | head -1)
+LATEST_BACKUP=$(ls -td Life_Is_A_Joke.backup* 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ]; then
     print_info "   Will restore .env from: $LATEST_BACKUP"
 fi
@@ -81,8 +81,8 @@ echo ""
 
 # Step 5: Clone fresh code
 print_info "Step 5/6: Cloning fresh code..."
-sudo git clone -b main https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git trading-bot
-cd trading-bot
+sudo git clone -b copilot/update-notification-format https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
+cd Life_Is_A_Joke
 
 print_info "   ✅ Code cloned"
 echo ""
@@ -112,7 +112,7 @@ print_info "   ✅ Dependencies installed"
 
 # Set proper permissions
 print_info "   Setting permissions..."
-sudo chown -R root:root /opt/trading-bot
+sudo chown -R root:root /opt/Life_Is_A_Joke
 print_info "   ✅ Permissions set"
 echo ""
 

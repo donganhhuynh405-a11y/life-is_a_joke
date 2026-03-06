@@ -96,6 +96,18 @@ class Database:
         except sqlite3.OperationalError:
             pass
 
+        # Fix invalid zero-date timestamps written by older bot versions
+        try:
+            cursor.execute(
+                "UPDATE positions SET closed_at = NULL WHERE closed_at = '0000-00-00 00:00:00'"
+            )
+            if cursor.rowcount > 0:
+                self.logger.info(
+                    f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
+                )
+        except sqlite3.OperationalError:
+            pass
+
         # Daily stats table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS daily_stats (

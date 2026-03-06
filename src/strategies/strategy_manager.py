@@ -906,6 +906,46 @@ class StrategyManager:
         except Exception as e:
             self.logger.error(f"Error closing position {position_id}: {str(e)}", exc_info=True)
 
+    def apply_strategy_adjustments(self, adjustments: Dict):
+        """
+        Apply strategy advisor adjustments to trading parameters.
+
+        Args:
+            adjustments: dict from StrategyAdvisor with keys such as:
+                - position_size_multiplier: float multiplier for position size
+                - confidence_threshold_adjustment: float delta (+/-) applied to min confidence %
+                - max_positions_multiplier: float multiplier for max open positions
+        """
+        if not adjustments:
+            return
+
+        if not self.adaptive_tactics:
+            # If adaptive tactics manager is not available, apply what we can directly
+            self.logger.info("📊 Strategy adjustments received (no adaptive tactics manager)")
+            return
+
+        # Apply position size multiplier
+        pos_mult = adjustments.get('position_size_multiplier')
+        if pos_mult is not None:
+            self.adaptive_tactics.tactical_overrides['position_size_multiplier'] = float(pos_mult)
+            self.logger.info(f"📊 Position size multiplier set to {pos_mult:.2f}x")
+
+        # Apply confidence threshold adjustment (delta in percentage points)
+        conf_adj = adjustments.get('confidence_threshold_adjustment')
+        if conf_adj is not None:
+            base_conf = getattr(self.config, 'min_signal_confidence', 50.0)
+            new_conf = max(30.0, min(95.0, base_conf + float(conf_adj)))
+            self.adaptive_tactics.tactical_overrides['min_confidence_threshold'] = new_conf
+            self.logger.info(f"📊 Min confidence threshold set to {new_conf:.0f}%")
+
+        # Apply max positions multiplier
+        max_pos_mult = adjustments.get('max_positions_multiplier')
+        if max_pos_mult is not None:
+            base_max = getattr(self.config, 'max_open_positions', 5)
+            new_max = max(1, int(base_max * float(max_pos_mult)))
+            self.adaptive_tactics.tactical_overrides['max_positions_override'] = new_max
+            self.logger.info(f"📊 Max positions set to {new_max}")
+
     def set_tactical_overrides(self, adaptive_tactics):
         """Set adaptive tactics manager for automatic adjustments"""
         self.adaptive_tactics = adaptive_tactics
@@ -974,6 +1014,8 @@ class StrategyManager:
                 symbol = position.get('symbol')
                 quantity = position.get('quantity', 0)
                 side = position.get('side', 'BUY')
+                entry_price = position.get('entry_price', 0)
+                exit_price = entry_price  # fallback: assume flat exit
 
                 # Close position on exchange
                 if self.config.trading_enabled:
@@ -986,19 +1028,48 @@ class StrategyManager:
                             order_type='market',
                             quantity=quantity
                         )
+                        order_price = order.get('price')
+                        # Only treat the order price as valid if it is a positive float.
+                        # Many exchange adapters return 0, "0", "", or "None" for market orders.
+                        if order_price is not None and order_price != 'None' and order_price != '':
+                            try:
+                                parsed_price = float(order_price)
+                            except (ValueError, TypeError):
+                                parsed_price = None
+                            if parsed_price is not None and parsed_price > 0:
+                                exit_price = parsed_price
                         self.logger.info(
                             f"Closed position {position['id']} on exchange: Order ID {order.get('orderId')}")
                     except Exception as e:
                         self.logger.error(
                             f"Failed to close position {position['id']} on exchange: {str(e)}")
 
+                # If we still have no real exit price, fetch the current market price
+                if exit_price == entry_price:
+                    try:
+                        ticker = self.client.get_ticker_24h(symbol)
+                        last_price = ticker.get('last_price')
+                        if last_price:
+                            exit_price = float(last_price)
+                    except Exception:
+                        pass
+
+                # Calculate PNL
+                if side == 'BUY':
+                    pnl = (exit_price - entry_price) * quantity
+                else:
+                    pnl = (entry_price - exit_price) * quantity
+
                 # Update database
                 self.db.update_position(
                     position['id'],
                     status='closed',
-                    closed_at='CURRENT_TIMESTAMP'
+                    closed_at='CURRENT_TIMESTAMP',
+                    exit_price=exit_price,
+                    pnl=pnl
                 )
-                self.logger.info(f"Closed position in database: {position['symbol']}")
+                self.logger.info(
+                    f"Closed position in database: {position['symbol']}, PNL: ${pnl:.4f}")
             except Exception as e:
                 self.logger.error(f"Error closing position {position['id']}: {str(e)}")
 

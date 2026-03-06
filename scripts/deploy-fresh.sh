@@ -40,10 +40,10 @@ echo ""
 # Step 2: Create backup with timestamp
 print_info "Step 2/8: Creating backup..."
 cd /opt
-if [ -d "trading-bot" ]; then
+if [ -d "Life_Is_A_Joke" ]; then
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    BACKUP_DIR="trading-bot.backup.$TIMESTAMP"
-    mv trading-bot "$BACKUP_DIR"
+    BACKUP_DIR="Life_Is_A_Joke.backup.$TIMESTAMP"
+    mv Life_Is_A_Joke "$BACKUP_DIR"
     print_info "   ✅ Backup created: $BACKUP_DIR"
 else
     print_warning "   No existing installation to backup"
@@ -52,20 +52,20 @@ echo ""
 
 # Step 3: Clone repository
 print_info "Step 3/8: Cloning repository..."
-git clone -b main https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git trading-bot
-cd trading-bot
+git clone -b copilot/update-notification-format https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
+cd Life_Is_A_Joke
 print_info "   ✅ Repository cloned"
 echo ""
 
 # Step 4: Restore .env
 print_info "Step 4/8: Restoring configuration..."
-LATEST_BACKUP=$(ls -td /opt/trading-bot.backup* 2>/dev/null | head -1)
+LATEST_BACKUP=$(ls -td /opt/Life_Is_A_Joke.backup* 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP/.env" ]; then
     cp "$LATEST_BACKUP/.env" .
     print_info "   ✅ .env restored from $LATEST_BACKUP"
 else
     print_warning "   No .env found - you'll need to configure manually"
-    print_warning "   Copy from: cp /opt/trading-bot.backup*/.env /opt/trading-bot/"
+    print_warning "   Copy from: cp /opt/Life_Is_A_Joke.backup*/.env /opt/Life_Is_A_Joke/"
 fi
 echo ""
 
@@ -84,7 +84,7 @@ echo ""
 
 # Step 7: Set permissions
 print_info "Step 7/8: Setting permissions..."
-chown -R root:root /opt/trading-bot
+chown -R root:root /opt/Life_Is_A_Joke
 chmod +x scripts/*.sh 2>/dev/null || true
 chmod +x scripts/*.py 2>/dev/null || true
 print_info "   ✅ Permissions set"

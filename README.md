@@ -637,6 +637,71 @@ The authors and contributors are not liable for any financial losses incurred wh
 
 ---
 
+## 🔄 Updating the Bot from This Branch
+
+To apply the latest fixes (including real AI/ML integration and corrected news filtering) to your running bot, follow these steps:
+
+### Step 1 — Pull the updated code
+
+```bash
+cd /opt/Life_Is_A_Joke          # or wherever the bot is installed
+source venv/bin/activate
+
+# If this is a fresh clone:
+git fetch origin
+git checkout copilot/update-notification-format
+git pull origin copilot/update-notification-format
+
+# If the bot is already on this branch:
+git pull origin copilot/update-notification-format
+```
+
+### Step 2 — Install / update dependencies
+
+```bash
+pip install -r requirements.txt
+# If aiohttp or feedparser are missing (needed for news):
+pip install aiohttp feedparser
+```
+
+### Step 3 — Restart the bot
+
+```bash
+# If running as a systemd service:
+sudo systemctl restart trading-bot
+
+# If running in Docker Compose:
+docker compose pull && docker compose up -d --force-recreate
+
+# If running manually:
+deactivate
+source venv/bin/activate
+python src/main.py
+```
+
+### Step 4 — Verify
+
+Check the logs to confirm all components started correctly:
+
+```bash
+# systemd:
+sudo journalctl -u trading-bot -f
+
+# Docker:
+docker compose logs -f trading-bot
+```
+
+You should see lines like:
+```
+✅ Adaptive tactics manager initialized
+✅ Strategy advisor initialized
+✅ News Aggregator INITIALIZED!
+```
+
+If you see `⚠️ Adaptive tactics not available` or `AI Commentary unavailable`, double-check that the virtual environment is activated and `requirements.txt` was installed into it.
+
+---
+
 ## 🌟 Acknowledgments
 
 Built with analysis of top-performing trading bots including:
