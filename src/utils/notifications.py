@@ -702,7 +702,7 @@ class TelegramNotifier:
                 from mi.ai_commentary import get_commentary_generator
                 commentary_gen = get_commentary_generator(self.logger, language=self.language)
                 ai_commentary = commentary_gen.generate_daily_summary_commentary(
-                    daily_pnl, open_positions_count
+                    daily_pnl, open_positions_count, monthly_roi=roi
                 )
             except Exception as e:
                 self.logger.error(f"Could not generate AI commentary: {e}", exc_info=True)
@@ -725,13 +725,13 @@ class TelegramNotifier:
                 message += f"📊 <b>{self.t('daily_trades', 'Сделок сегодня')}:</b> <code>{daily_trades}</code>\n"
 
             # Add ROI if provided and non-zero.
-            # Skip when zero: the AI daily commentary already covers monthly performance,
-            # and showing "0.00%" alongside a different figure in the commentary
-            # produces confusing contradictions.
+            # Suppress values that would display as "0.00%" or "-0.00%" — these are
+            # confusing and imply the figure is meaningless. A threshold of 0.005
+            # (i.e., rounds to at least ±0.01%) avoids the misleading display.
             if roi is not None:
                 try:
                     roi_float = float(roi)
-                    if roi_float != 0.0:
+                    if abs(roi_float) >= 0.005:
                         roi_sign = "+" if roi_float > 0 else ""
                         roi_emoji = "📈" if roi_float > 0 else "📉"
                         message += f"{roi_emoji} <b>{self.t('roi', 'ROI (месяц)')}:</b> <code>{roi_sign}{roi_float:.2f}%</code>\n"
