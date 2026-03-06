@@ -575,6 +575,7 @@ class AICommentaryGenerator:
                     parts.append(
                         f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss "
                         f"({win_rate_30d:.0f}% win rate)")
+
                 # Guard: if the appended ROI is implausible (> 100 % MoM the
                 # USDT-only snapshot understates the full portfolio), replace
                 # the last message with one that omits the misleading figure.
