@@ -5,6 +5,7 @@ ML Training Pipeline
 Запускается при старте бота и периодически для переобучения.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -126,37 +127,50 @@ class MLTrainingPipeline:
             logger.info("   Skipping training (use force_retrain=True to retrain)")
             return None
 
-        # Загрузить исторические данные
-        logger.info(f"📥 Fetching historical data for {symbol}...")
-        df = await self.data_fetcher.fetch_full_history(
-            symbol=symbol,
-            timeframe=self.timeframe,
-            force_reload=self.force_retrain
-        )
+        # Write a lock file so _collect_ml_status() can surface "training in progress"
+        # to the hourly notification.  Always clean it up in the finally block.
+        _lock_path = self.trainer.models_dir / '.training.lock'
+        try:
+            _lock_path.parent.mkdir(parents=True, exist_ok=True)
+            _lock_path.write_text(json.dumps({'symbol': symbol}))
 
-        if df is None or len(df) < self.trainer.min_training_samples:
-            logger.error(
-                f"❌ Insufficient data for {symbol}: {len(df) if df is not None else 0} candles")
-            raise ValueError("Not enough data for training")
+            # Загрузить исторические данные
+            logger.info(f"📥 Fetching historical data for {symbol}...")
+            df = await self.data_fetcher.fetch_full_history(
+                symbol=symbol,
+                timeframe=self.timeframe,
+                force_reload=self.force_retrain
+            )
 
-        logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
-        logger.info(f"   Date range: {df.index[0]} to {df.index[-1]}")
+            if df is None or len(df) < self.trainer.min_training_samples:
+                logger.error(
+                    f"❌ Insufficient data for {symbol}: {len(df) if df is not None else 0} candles")
+                raise ValueError("Not enough data for training")
 
-        # Обучить модель
-        logger.info(f"🎓 Training model for {symbol}...")
-        metrics = self.trainer.train_model(
-            symbol=symbol,
-            df=df,
-            test_size=0.2
-        )
+            logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
+            logger.info(f"   Date range: {df.index[0]} to {df.index[-1]}")
 
-        if metrics:
-            logger.info(f"✅ Training completed for {symbol}")
-            logger.info(f"   Accuracy: {metrics.accuracy:.4f}")
-            logger.info(f"   F1 Score: {metrics.f1_score:.4f}")
-            return metrics
-        else:
-            raise ValueError("Training failed")
+            # Обучить модель
+            logger.info(f"🎓 Training model for {symbol}...")
+            metrics = self.trainer.train_model(
+                symbol=symbol,
+                df=df,
+                test_size=0.2
+            )
+
+            if metrics:
+                logger.info(f"✅ Training completed for {symbol}")
+                logger.info(f"   Accuracy: {metrics.accuracy:.4f}")
+                logger.info(f"   F1 Score: {metrics.f1_score:.4f}")
+                return metrics
+            else:
+                raise ValueError("Training failed")
+        finally:
+            # Always remove the lock file regardless of success / failure
+            try:
+                _lock_path.unlink(missing_ok=True)
+            except Exception as _e:
+                logger.debug(f"Could not remove training lock file: {_e}")
 
     def _print_summary(self):
         """Вывести итоговый отчет"""

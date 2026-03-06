@@ -956,8 +956,11 @@ class TelegramNotifier:
                 except Exception as e:
                     self.logger.error(f"Error formatting AI strategy section: {e}")
 
-            # Add ML Model Status section if available
-            if ml_status:
+            # Add ML Model Status section if available.
+            # The dict is always passed from bot.py (even when empty), so we use
+            # `is not None` rather than a truthiness check — an empty dict {}
+            # (no models trained yet) should still render "No models trained yet".
+            if ml_status is not None:
                 try:
                     training_active = ml_status.get('_training_active', False)
                     training_symbol = ml_status.get('_training_symbol', '')

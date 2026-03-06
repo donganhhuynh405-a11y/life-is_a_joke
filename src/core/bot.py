@@ -768,6 +768,11 @@ class TradingBot:
         Returns a dict keyed by symbol (e.g. 'BTCUSDT') with their metrics,
         plus optional private keys '_training_active', '_training_symbol', and
         '_summary' (aggregated stats across all trained models).
+
+        The dict is always returned (never None).  An empty dict means no models
+        have been trained yet.  The notification layer uses `is not None` to
+        decide whether to render the section, so even an empty dict will produce
+        a "No models trained yet" message.
         """
         import json
         from pathlib import Path
@@ -775,6 +780,20 @@ class TradingBot:
 
         models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
         result: dict = {}
+
+        # ── Training-in-progress detection ────────────────────────────────────
+        # The training pipeline writes a lock file while a symbol is being trained
+        # (see MLTrainingPipeline.train_symbol).  We pick it up here so the
+        # notification can display a real-time "🔄 Training in progress" indicator.
+        lock_file = models_dir / '.training.lock'
+        if lock_file.exists():
+            try:
+                lock_data = json.loads(lock_file.read_text())
+                result['_training_active'] = True
+                result['_training_symbol'] = lock_data.get('symbol', '')
+            except Exception:
+                result['_training_active'] = True
+                result['_training_symbol'] = ''
 
         if not models_dir.exists():
             return result
