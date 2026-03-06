@@ -80,11 +80,11 @@ def print_update_deployment():
     print_section("UPDATE & DEPLOYMENT", "🔄")
 
     commands = [
-        ("cd /opt/Life_Is_A_Joke && git fetch origin && git checkout main && git pull origin main", "Pull latest changes from repository"),
-        ("cd /opt/Life_Is_A_Joke && venv/bin/pip install -r requirements.txt", "Update Python dependencies"),
+        ("cd /opt/trading-bot && git pull", "Pull latest changes from repository"),
+        ("cd /opt/trading-bot && venv/bin/pip install -r requirements.txt", "Update Python dependencies"),
         ("sudo systemctl restart trading-bot", "Restart bot after updates"),
-        ("cd /opt/Life_Is_A_Joke && git status", "Check repository status and changes"),
-        ("cd /opt/Life_Is_A_Joke && git log --oneline -10", "View last 10 commits"),
+        ("cd /opt/trading-bot && git status", "Check repository status and changes"),
+        ("cd /opt/trading-bot && git log --oneline -10", "View last 10 commits"),
     ]
 
     for cmd, desc in commands:
@@ -96,10 +96,10 @@ def print_diagnostics():
     print_section("DIAGNOSTICS & DEBUGGING", "🔍")
 
     commands = [
-        ("python3 /opt/Life_Is_A_Joke/scripts/test_ai_system.py", "🤖 Test AI system (commentary, adaptive tactics, ML analyzers)"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/analyze_trades.py", "📊 Run full ML performance analysis"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/diagnose_positions.py", "Run position diagnostics script"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/health_check.py", "Run comprehensive health check"),
+        ("python3 /opt/trading-bot/scripts/test_ai_system.py", "🤖 Test AI system (commentary, adaptive tactics, ML analyzers)"),
+        ("python3 /opt/trading-bot/scripts/analyze_trades.py", "📊 Run full ML performance analysis"),
+        ("python3 /opt/trading-bot/scripts/diagnose_positions.py", "Run position diagnostics script"),
+        ("python3 /opt/trading-bot/scripts/health_check.py", "Run comprehensive health check"),
         ("sqlite3 /var/lib/trading-bot/trading_bot.db 'SELECT * FROM positions;'", "Query all positions from database"),
         ("sqlite3 /var/lib/trading-bot/trading_bot.db 'SELECT * FROM positions WHERE status=\"open\";'", "Query only open positions"),
         ("sqlite3 /var/lib/trading-bot/trading_bot.db 'SELECT * FROM positions WHERE status=\"closed\" ORDER BY closed_at DESC LIMIT 10;'", "View last 10 closed positions"),
@@ -115,11 +115,11 @@ def print_configuration():
     print_section("CONFIGURATION", "⚙️")
 
     commands = [
-        ("nano /opt/Life_Is_A_Joke/.env", "Edit bot configuration (use Ctrl+X to save and exit)"),
-        ("cat /opt/Life_Is_A_Joke/.env", "View current configuration"),
-        ("cat /opt/Life_Is_A_Joke/.env | grep MAX_", "View position and trade limits"),
-        ("cat /opt/Life_Is_A_Joke/.env | grep CONFIDENCE", "View confidence-based sizing settings"),
-        ("cat /opt/Life_Is_A_Joke/.env | grep NEWS", "View news analysis settings"),
+        ("nano /opt/trading-bot/.env", "Edit bot configuration (use Ctrl+X to save and exit)"),
+        ("cat /opt/trading-bot/.env", "View current configuration"),
+        ("cat /opt/trading-bot/.env | grep MAX_", "View position and trade limits"),
+        ("cat /opt/trading-bot/.env | grep CONFIDENCE", "View confidence-based sizing settings"),
+        ("cat /opt/trading-bot/.env | grep NEWS", "View news analysis settings"),
     ]
 
     for cmd, desc in commands:
@@ -135,8 +135,8 @@ def print_database():
         ("sqlite3 /var/lib/trading-bot/trading_bot.db '.schema'", "View database schema"),
         ("sqlite3 /var/lib/trading-bot/trading_bot.db 'PRAGMA table_info(positions);'", "View positions table structure"),
         ("sqlite3 /var/lib/trading-bot/trading_bot.db '.backup /tmp/trading_bot_backup.db'", "Create database backup"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/reset_daily_limit.py --status", "Check current daily trade limit status"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/reset_daily_limit.py", "Reset daily trade counter (allows more trading today)"),
+        ("python3 /opt/trading-bot/scripts/reset_daily_limit.py --status", "Check current daily trade limit status"),
+        ("python3 /opt/trading-bot/scripts/reset_daily_limit.py", "Reset daily trade counter (allows more trading today)"),
     ]
 
     for cmd, desc in commands:
@@ -148,11 +148,11 @@ def print_maintenance():
     print_section("MAINTENANCE", "🧹")
 
     commands = [
-        ("sudo find /opt/Life_Is_A_Joke -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null", "Clean Python cache files"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/cleanup_old_data.py", "Clean old data from database"),
-        ("python3 /opt/Life_Is_A_Joke/scripts/optimize_database.py", "Optimize database for better performance"),
-        ("sudo python3 /opt/Life_Is_A_Joke/scripts/clean_root_cache.py", "Clean /root cache to free disk space"),
-        ("df -h /opt/Life_Is_A_Joke", "Check disk space usage"),
+        ("sudo find /opt/trading-bot -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null", "Clean Python cache files"),
+        ("python3 /opt/trading-bot/scripts/cleanup_old_data.py", "Clean old data from database"),
+        ("python3 /opt/trading-bot/scripts/optimize_database.py", "Optimize database for better performance"),
+        ("sudo python3 /opt/trading-bot/scripts/clean_root_cache.py", "Clean /root cache to free disk space"),
+        ("df -h /opt/trading-bot", "Check disk space usage"),
     ]
 
     for cmd, desc in commands:
@@ -168,8 +168,8 @@ def print_troubleshooting():
         ("sudo systemctl reset-failed trading-bot", "Reset failed state if service won't start"),
         ("journalctl -xe", "View system logs for recent errors"),
         ("ps aux | grep trading", "Check if bot process is running"),
-        ("cd /opt/Life_Is_A_Joke && rm -rf venv && python3 -m venv venv", "Recreate virtual environment if broken"),
-        ("cd /opt/Life_Is_A_Joke && venv/bin/pip install -r requirements.txt", "Reinstall all dependencies"),
+        ("cd /opt/trading-bot && rm -rf venv && python3 -m venv venv", "Recreate virtual environment if broken"),
+        ("cd /opt/trading-bot && venv/bin/pip install -r requirements.txt", "Reinstall all dependencies"),
     ]
 
     for cmd, desc in commands:
@@ -181,11 +181,11 @@ def print_quick_recipes():
     print_section("QUICK RECIPES", "💡")
 
     print(f"{Colors.YELLOW}Full update and restart:{Colors.NC}")
-    print("   cd /opt/Life_Is_A_Joke && git fetch origin && git checkout main && git pull origin main && venv/bin/pip install -r requirements.txt && sudo systemctl restart trading-bot")
+    print("   cd /opt/trading-bot && git pull && venv/bin/pip install -r requirements.txt && sudo systemctl restart trading-bot")
     print()
 
     print(f"{Colors.YELLOW}Test AI system:{Colors.NC}")
-    print("   python3 /opt/Life_Is_A_Joke/scripts/test_ai_system.py")
+    print("   python3 /opt/trading-bot/scripts/test_ai_system.py")
     print()
 
     print(f"{Colors.YELLOW}View today's P&L:{Colors.NC}")
