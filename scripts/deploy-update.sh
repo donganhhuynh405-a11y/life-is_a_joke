@@ -24,6 +24,10 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# Canonical repository URL and branch
+CORRECT_REPO_URL="https://github.com/donganhhuynh405-a11y/life-is_a_joke.git"
+BRANCH="main"
+
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
     print_error "Please run as root or with sudo"
@@ -38,35 +42,58 @@ if [ ! -f "requirements.txt" ]; then
 fi
 
 # Step 1: Stop bot
-print_info "Step 1/6: Stopping bot..."
+print_info "Step 1/7: Stopping bot..."
 systemctl stop trading-bot 2>/dev/null || true
 sleep 2
 print_info "   ✅ Stopped"
 echo ""
 
-# Step 2: Clean Python cache
-print_info "Step 2/6: Cleaning Python cache..."
+# Step 2: Fix remote URL if it points to the wrong repository
+print_info "Step 2/7: Verifying git remote URL..."
+CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+if [ "$CURRENT_REMOTE" != "$CORRECT_REPO_URL" ]; then
+    print_warning "   Remote URL is wrong: $CURRENT_REMOTE"
+    print_info   "   Fixing remote URL to: $CORRECT_REPO_URL"
+    git remote set-url origin "$CORRECT_REPO_URL"
+    print_info   "   ✅ Remote URL corrected"
+else
+    print_info   "   ✅ Remote URL is correct: $CURRENT_REMOTE"
+fi
+echo ""
+
+# Step 3: Clean Python cache
+print_info "Step 3/7: Cleaning Python cache..."
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 print_info "   ✅ Cache cleaned"
 echo ""
 
-# Step 3: Stash local changes
-print_info "Step 3/6: Saving local changes..."
-git stash save "Auto-stash before update $(date)" 2>/dev/null || true
-print_info "   ✅ Changes saved"
+# Step 4: Stash local changes (including config.yaml and any other modified files)
+print_info "Step 4/7: Saving local changes..."
+# 'git stash push --include-untracked' requires git ≥ 2.13.
+# If nothing is to stash, git still exits 0 on modern git; the || true handles
+# older versions that may exit 1 when there is nothing to stash.
+if git stash push --include-untracked -m "Auto-stash before update $(date)" 2>/dev/null; then
+    print_info "   ✅ Local changes stashed"
+else
+    print_info "   ✅ No local changes to stash"
+fi
 echo ""
 
-# Step 4: Update code
-print_info "Step 4/6: Updating code..."
+# Step 5: Update code from the correct remote and branch
+print_info "Step 5/7: Updating code from $CORRECT_REPO_URL ($BRANCH)..."
 git fetch origin
-git checkout main
-git pull origin main
-print_info "   ✅ Code updated"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+    print_info "   Switching branch: $CURRENT_BRANCH → $BRANCH"
+    git checkout "$BRANCH"
+fi
+git pull origin "$BRANCH"
+print_info "   ✅ Code updated to: $(git log --oneline -1)"
 echo ""
 
-# Step 5: Update dependencies
-print_info "Step 5/6: Updating dependencies..."
+# Step 6: Update dependencies
+print_info "Step 6/7: Updating dependencies..."
 if [ ! -d "venv" ]; then
     print_warning "   venv not found, creating..."
     python3 -m venv venv
@@ -76,8 +103,8 @@ venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 print_info "   ✅ Dependencies updated"
 echo ""
 
-# Step 6: Start bot
-print_info "Step 6/6: Starting bot..."
+# Step 7: Start bot
+print_info "Step 7/7: Starting bot..."
 systemctl start trading-bot
 sleep 3
 

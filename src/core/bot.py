@@ -763,20 +763,24 @@ class TradingBot:
             self.logger.error(f"Error sending hourly notification: {e}", exc_info=True)
 
     def _collect_ml_status(self) -> dict:
-        """Read ML model metrics (accuracy, F1, training date) for all symbols.
+        """Read ML model metrics (accuracy, F1, precision, recall, training date) for all symbols.
 
         Returns a dict keyed by symbol (e.g. 'BTCUSDT') with their metrics,
-        plus optional private keys '_training_active' and '_training_symbol'.
+        plus optional private keys '_training_active', '_training_symbol', and
+        '_summary' (aggregated stats across all trained models).
         """
         import json
-        import os
         from pathlib import Path
+        from datetime import datetime
 
         models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
         result: dict = {}
 
         if not models_dir.exists():
             return result
+
+        trained_count = 0
+        total_accuracy = 0.0
 
         try:
             for symbol_dir in sorted(models_dir.iterdir()):
@@ -788,16 +792,46 @@ class TradingBot:
                 try:
                     with open(metrics_path, 'r') as f:
                         metrics = json.load(f)
+
+                    training_date = metrics.get('training_date', '')
+                    days_old: int | None = None
+                    if training_date:
+                        try:
+                            trained_dt = datetime.fromisoformat(training_date)
+                            # Strip timezone info from both sides to compare naive datetimes
+                            if trained_dt.tzinfo is not None:
+                                trained_dt = trained_dt.replace(tzinfo=None)
+                            delta = (datetime.now() - trained_dt).days
+                            # Negative values can appear if the clock is skewed; clamp to 0
+                            days_old = max(0, delta)
+                        except Exception:
+                            pass
+
+                    acc = metrics.get('accuracy', 0)
+                    trained_count += 1
+                    total_accuracy += acc
+
                     result[symbol_dir.name] = {
-                        'accuracy': metrics.get('accuracy', 0),
+                        'accuracy': acc,
                         'f1_score': metrics.get('f1_score', 0),
+                        'precision': metrics.get('precision', 0),
+                        'recall': metrics.get('recall', 0),
                         'train_samples': metrics.get('train_samples', 0),
-                        'training_date': metrics.get('training_date', ''),
+                        'test_samples': metrics.get('test_samples', 0),
+                        'training_date': training_date,
+                        'days_old': days_old,
+                        'model_version': metrics.get('model_version', '1.0'),
                     }
                 except Exception as exc:
                     self.logger.debug(f"Could not read ML metrics for {symbol_dir.name}: {exc}")
         except Exception as exc:
             self.logger.warning(f"Could not scan ML models directory: {exc}")
+
+        if trained_count > 0:
+            result['_summary'] = {
+                'trained_count': trained_count,
+                'avg_accuracy': total_accuracy / trained_count,
+            }
 
         return result
 

@@ -942,23 +942,49 @@ class TelegramNotifier:
                 try:
                     training_active = ml_status.get('_training_active', False)
                     training_symbol = ml_status.get('_training_symbol', '')
+                    summary = ml_status.get('_summary', {})
                     # Filter out private keys — only symbol-keyed metrics remain
                     model_entries = {k: v for k, v in ml_status.items()
                                      if not k.startswith('_') and isinstance(v, dict)}
 
-                    message += "\n\n🤖 <b>ML Models:</b>\n"
+                    trained_count = summary.get('trained_count', len(model_entries))
+                    avg_acc = summary.get('avg_accuracy', 0.0)
+
+                    # Overall knowledge-level label
+                    if avg_acc >= 0.70:
+                        knowledge_label = "🧠 Expert"
+                    elif avg_acc >= 0.60:
+                        knowledge_label = "📚 Intermediate"
+                    elif avg_acc >= 0.50:
+                        knowledge_label = "🌱 Learning"
+                    else:
+                        knowledge_label = "⏳ Initializing"
+
+                    # Simple ASCII progress bar (10 chars wide) based on avg accuracy
+                    _bar_fill = min(10, int(avg_acc * 10))
+                    _bar = "█" * _bar_fill + "░" * (10 - _bar_fill)
+
+                    message += "\n\n🤖 <b>AI/ML Training Status:</b>\n"
 
                     if training_active and training_symbol:
                         message += f"  🔄 <i>Training in progress: <b>{training_symbol}</b></i>\n"
 
                     if model_entries:
+                        message += (
+                            f"  📊 Models trained: <b>{trained_count}</b> symbols\n"
+                            f"  {knowledge_label}  |  Avg accuracy: <b>{avg_acc:.1%}</b>\n"
+                            f"  Knowledge: <code>[{_bar}]</code>\n\n"
+                        )
+
                         for symbol, m in list(model_entries.items())[:5]:
                             acc = m.get('accuracy', 0)
                             f1 = m.get('f1_score', 0)
+                            prec = m.get('precision', 0)
+                            rec = m.get('recall', 0)
                             samples = m.get('train_samples', 0)
-                            trained_at = m.get('training_date', '')
-                            # Show only date part (not the full ISO timestamp)
-                            trained_date = trained_at[:10] if trained_at else '—'
+                            test_samples = m.get('test_samples', 0)
+                            days_old = m.get('days_old')
+                            model_ver = m.get('model_version', '1.0')
 
                             # Quality emoji
                             if acc >= 0.65:
@@ -968,10 +994,22 @@ class TelegramNotifier:
                             else:
                                 quality = "🔴"
 
+                            # Age label (days_old is clamped to ≥0 by _collect_ml_status)
+                            if days_old is None:
+                                age_label = "unknown"
+                            elif days_old <= 0:
+                                age_label = "today"
+                            elif days_old == 1:
+                                age_label = "1d ago"
+                            else:
+                                age_label = f"{days_old}d ago"
+
                             message += (
-                                f"  {quality} <code>{symbol}</code>: "
-                                f"Acc={acc:.1%} F1={f1:.1%} "
-                                f"({samples:,} samples, trained {trained_date})\n"
+                                f"  {quality} <code>{symbol}</code> v{model_ver}\n"
+                                f"     Acc={acc:.1%}  F1={f1:.1%}  "
+                                f"P={prec:.1%}  R={rec:.1%}\n"
+                                f"     Trained on {samples:,} samples "
+                                f"(test: {test_samples:,})  ·  {age_label}\n"
                             )
                     else:
                         message += "  ⏳ No models trained yet\n"
