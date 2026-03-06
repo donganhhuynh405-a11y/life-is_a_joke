@@ -16,6 +16,14 @@ try:
 except ImportError:
     TRANSLATIONS_AVAILABLE = False
 
+# ── Strategy / confidence constants ────────────────────────────────────────────
+# Used when computing effective confidence from a delta-based adjustment key
+# ('confidence_threshold_adjustment') rather than an absolute value key.
+_CONF_BASE_PCT = 50.0      # baseline confidence % before adjustment
+_CONF_MIN_PCT = 30.0       # lower bound for clamping
+_CONF_MAX_PCT = 95.0       # upper bound for clamping
+_MAX_POSITIONS_BASE = 5    # base value when 'max_positions_multiplier' is used
+
 
 class TelegramNotifier:
     """Telegram notification handler for trading bot with multilingual support"""
@@ -716,13 +724,17 @@ class TelegramNotifier:
             if daily_trades is not None:
                 message += f"📊 <b>{self.t('daily_trades', 'Сделок сегодня')}:</b> <code>{daily_trades}</code>\n"
 
-            # Add ROI if provided
+            # Add ROI if provided and non-zero.
+            # Skip when zero: the AI daily commentary already covers monthly performance,
+            # and showing "0.00%" alongside a different figure in the commentary
+            # produces confusing contradictions.
             if roi is not None:
                 try:
                     roi_float = float(roi)
-                    roi_sign = "+" if roi_float > 0 else ""
-                    roi_emoji = "📈" if roi_float > 0 else "📉" if roi_float < 0 else "➖"
-                    message += f"{roi_emoji} <b>{self.t('roi', 'ROI (месяц)')}:</b> <code>{roi_sign}{roi_float:.2f}%</code>\n"
+                    if roi_float != 0.0:
+                        roi_sign = "+" if roi_float > 0 else ""
+                        roi_emoji = "📈" if roi_float > 0 else "📉"
+                        message += f"{roi_emoji} <b>{self.t('roi', 'ROI (месяц)')}:</b> <code>{roi_sign}{roi_float:.2f}%</code>\n"
                 except (ValueError, TypeError):
                     pass
 
@@ -842,100 +854,107 @@ class TelegramNotifier:
                     self.logger.error(f"Error formatting trend analysis: {e}")
                     message += "\n📈 Анализ трендов недоступен\n"
 
-            # Add AI Adaptive Tactics section if available
-            if ai_tactics:
+            # ----------------------------------------------------------------
+            # Unified AI Strategy Status section.
+            #
+            # Previously there were two separate sections that showed the
+            # same metrics (position size, min confidence, max positions)
+            # from different data sources (ai_tactics vs strategy_adjustments),
+            # which produced conflicting numbers and user confusion.
+            #
+            # Now we show a single section that merges both sources:
+            #   • Base values come from ai_tactics (AdaptiveTactics)
+            #   • strategy_adjustments overrides win when present (StrategyAdvisor)
+            #   • Risk level and reasoning come from strategy_adjustments
+            # ----------------------------------------------------------------
+            if ai_tactics or strategy_adjustments is not None:
                 try:
-                    position_mult = ai_tactics.get('position_size_multiplier', 1.0)
-                    confidence_threshold = ai_tactics.get(
-                        'confidence_threshold', 0.5) * 100  # Convert to percentage
-                    max_pos = ai_tactics.get('max_positions', 'N/A')
-                    blocked = ai_tactics.get('blocked_symbols', [])
+                    # ── Base values from ai_tactics ──────────────────────────
+                    base_position_mult = None
+                    base_confidence = None
+                    base_max_pos = None
+                    blocked = []
 
-                    message += "\n" + self.t('ai_adaptive_strategy') + "\n"
-                    message += f"  📊 Position Size: <b>{position_mult:.0%}</b>\n"
-                    message += f"  🎯 Min Confidence: <b>{confidence_threshold:.0f}%</b>\n"
-                    message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
+                    if ai_tactics:
+                        base_position_mult = ai_tactics.get('position_size_multiplier')
+                        raw_conf = ai_tactics.get('confidence_threshold')
+                        if raw_conf is not None:
+                            base_confidence = float(raw_conf) * 100
+                        base_max_pos = ai_tactics.get('max_positions')
+                        blocked = ai_tactics.get('blocked_symbols', [])
+
+                    # ── Override values from strategy_adjustments ────────────
+                    risk_level = None
+                    risk_emoji = ''
+                    risk_level_text = ''
+                    reasoning = []
+                    effective_position_mult = base_position_mult
+                    effective_confidence = base_confidence
+                    effective_max_pos = base_max_pos
+
+                    if strategy_adjustments is not None:
+                        self.logger.info(
+                            f"📊 Displaying strategy adjustments in notification: {strategy_adjustments}")
+                        adjustments = strategy_adjustments.get('adjustments', {})
+                        reasoning = strategy_adjustments.get('reasoning', [])
+                        risk_level = strategy_adjustments.get('risk_level', 'normal')
+
+                        risk_emoji = {
+                            'very_low': '🟢', 'low': '🟢', 'normal': '🟡',
+                            'high': '🟠', 'critical': '🔴'
+                        }.get(risk_level, '⚪')
+                        risk_level_text = {
+                            'very_low': self.t('risk_very_low', 'Very Low'),
+                            'low': self.t('risk_low', 'Low'),
+                            'normal': self.t('risk_normal', 'Normal'),
+                            'high': self.t('risk_high', 'High'),
+                            'critical': self.t('risk_critical', 'Critical')
+                        }.get(risk_level, risk_level)
+
+                        if adjustments:
+                            if 'position_size_multiplier' in adjustments:
+                                effective_position_mult = adjustments['position_size_multiplier']
+
+                            if 'confidence_threshold_adjustment' in adjustments:
+                                adj_conf = _CONF_BASE_PCT + adjustments['confidence_threshold_adjustment']
+                                effective_confidence = max(_CONF_MIN_PCT, min(_CONF_MAX_PCT, adj_conf))
+                            elif 'confidence_threshold' in adjustments:
+                                effective_confidence = adjustments['confidence_threshold'] * 100
+
+                            if 'max_positions_multiplier' in adjustments:
+                                effective_max_pos = max(
+                                    1, int(_MAX_POSITIONS_BASE * adjustments['max_positions_multiplier']))
+                            elif 'max_positions' in adjustments:
+                                effective_max_pos = adjustments['max_positions']
+
+                    # ── Render the single merged section ─────────────────────
+                    message += f"\n\n📊 <b>{self.t('strategy_status', 'AI Strategy Status')}:</b>\n"
+
+                    if risk_level:
+                        message += f"  {risk_emoji} {self.t('risk_level', 'Risk Level')}: <b>{risk_level_text}</b>\n"
+
+                    if effective_position_mult is not None:
+                        message += f"  📊 Position Size: <b>{effective_position_mult:.0%}</b>\n"
+                    if effective_confidence is not None:
+                        message += f"  🎯 Min Confidence: <b>{effective_confidence:.0f}%</b>\n"
+                    if effective_max_pos is not None:
+                        message += f"  📋 Max Positions: <b>{effective_max_pos}</b>\n"
 
                     if blocked:
-                        blocked_str = ", ".join(blocked[:3])  # Show first 3
+                        blocked_str = ", ".join(blocked[:3])
                         if len(blocked) > 3:
                             blocked_str += f" +{len(blocked) - 3} more"
                         message += f"  ⛔ Blocked Pairs: <code>{blocked_str}</code>\n"
-                    else:
+                    elif ai_tactics:
                         message += "  ✅ All pairs active\n"
-                except Exception as e:
-                    self.logger.error(f"Error formatting AI tactics: {e}")
 
-            # Add Strategy Adjustments section if available
-            if strategy_adjustments is not None:
-                self.logger.info(
-                    f"📊 Displaying strategy adjustments in notification: {strategy_adjustments}")
-                try:
-                    adjustments = strategy_adjustments.get('adjustments', {})
-                    reasoning = strategy_adjustments.get('reasoning', [])
-                    risk_level = strategy_adjustments.get('risk_level', 'normal')
-
-                    # Risk level emoji
-                    risk_emoji = {
-                        'very_low': '🟢',
-                        'low': '🟢',
-                        'normal': '🟡',
-                        'high': '🟠',
-                        'critical': '🔴'
-                    }.get(risk_level, '⚪')
-
-                    # Translated risk level
-                    risk_level_text = {
-                        'very_low': self.t('risk_very_low', 'Very Low'),
-                        'low': self.t('risk_low', 'Low'),
-                        'normal': self.t('risk_normal', 'Normal'),
-                        'high': self.t('risk_high', 'High'),
-                        'critical': self.t('risk_critical', 'Critical')
-                    }.get(risk_level, risk_level)
-
-                    message += f"\n\n📊 <b>{self.t('strategy_status', 'AI Strategy Status')}:</b>\n"
-
-                    # Always show risk level
-                    message += f"  {risk_emoji} {self.t('risk_level', 'Risk Level')}: <b>{risk_level_text}</b>\n"
-
-                    # Show adjustments section
-                    message += f"\n  <b>{self.t('adjustments', 'Current Adjustments')}:</b>\n"
-
-                    if adjustments:
-                        if 'position_size_multiplier' in adjustments:
-                            mult = adjustments['position_size_multiplier']
-                            message += f"  📊 Position Size: <b>{mult:.0%}</b>\n"
-
-                        # Support both 'confidence_threshold_adjustment' (StrategyAdvisor)
-                        # and 'confidence_threshold' (AdaptiveTactics) key names
-                        if 'confidence_threshold_adjustment' in adjustments:
-                            base_conf = 50.0
-                            conf = base_conf + adjustments['confidence_threshold_adjustment']
-                            conf = max(30.0, min(95.0, conf))
-                            message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
-                        elif 'confidence_threshold' in adjustments:
-                            conf = adjustments['confidence_threshold'] * 100
-                            message += f"  🎯 Min Confidence: <b>{conf:.0f}%</b>\n"
-
-                        # Support both 'max_positions_multiplier' and 'max_positions'
-                        if 'max_positions_multiplier' in adjustments:
-                            base_max = 5
-                            max_pos = max(1, int(base_max * adjustments['max_positions_multiplier']))
-                            message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
-                        elif 'max_positions' in adjustments:
-                            max_pos = adjustments['max_positions']
-                            message += f"  📋 Max Positions: <b>{max_pos}</b>\n"
-                    else:
-                        message += f"  ✅ {self.t('optimal_conditions', 'Optimal trading conditions - no adjustments needed')}\n"
-
-                    # Always show reasoning if available (independent of adjustments)
-                    if reasoning and len(reasoning) > 0:
+                    if reasoning:
                         message += f"\n  <b>{self.t('reasoning', 'Reasoning')}:</b>\n"
                         for reason in reasoning[:3]:
                             message += f"  • {reason}\n"
 
                 except Exception as e:
-                    self.logger.error(f"Error formatting strategy adjustments: {e}")
+                    self.logger.error(f"Error formatting AI strategy section: {e}")
 
             # Add ML Model Status section if available
             if ml_status:

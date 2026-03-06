@@ -25,8 +25,16 @@ print_warning() {
 }
 
 # Canonical repository URL and branch
+# Accept branch as first argument; fall back to the currently checked-out branch,
+# then to "main" as last resort.
 CORRECT_REPO_URL="https://github.com/donganhhuynh405-a11y/life-is_a_joke.git"
-BRANCH="main"
+if [ -n "$1" ]; then
+    BRANCH="$1"
+else
+    DETECTED=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    BRANCH="${DETECTED:-main}"
+fi
+print_info "Target branch: $BRANCH"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
