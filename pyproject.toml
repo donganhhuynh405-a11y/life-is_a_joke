@@ -109,7 +109,7 @@ trading-bot = "src.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*", "backtester*"]
+include = ["src*", "tools*"]
 
 [tool.black]
 line-length = 100
@@ -129,7 +129,7 @@ extend-exclude = '''
 [tool.isort]
 profile = "black"
 line_length = 100
-known_first_party = ["src", "backtester"]
+known_first_party = ["src", "tools"]
 skip_glob = ["venv/*", ".venv/*", "frontend/*"]
 
 [tool.pytest.ini_options]

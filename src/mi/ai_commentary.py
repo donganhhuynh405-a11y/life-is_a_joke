@@ -142,7 +142,8 @@ class AICommentaryGenerator:
         }
 
     def generate_position_open_commentary(self, symbol: str, side: str,
-                                          confidence: float = None) -> str:
+                                          confidence: float = None,
+                                          signal_data: dict = None) -> str:
         """
         Generate AI commentary for position opening with adaptive analysis
 
@@ -150,6 +151,7 @@ class AICommentaryGenerator:
             symbol: Trading pair symbol
             side: BUY or SELL
             confidence: Signal confidence score (0-1 or 0-100)
+            signal_data: Optional full signal dict with ml_reasoning, ml_adjustment, etc.
 
         Returns:
             Commentary string with context-aware insights
@@ -179,16 +181,14 @@ class AICommentaryGenerator:
                 conf_pct = confidence * 100
                 if conf_pct >= thresholds['high_confidence']:
                     parts.append(
-                        f"🎯 <b>High confidence signal ({
-                            conf_pct:.0f}%)</b> - Strong indicator alignment detected.")
+                        f"🎯 <b>High confidence signal ({conf_pct:.0f}%)</b> - Strong indicator alignment detected.")
                 elif conf_pct >= thresholds['moderate_confidence']:
                     parts.append(
-                        f"📊 <b>Moderate confidence ({
-                            conf_pct:.0f}%)</b> - Good technical setup.")
+                        f"📊 <b>Moderate confidence ({conf_pct:.0f}%)</b> - Good technical setup.")
                 else:
                     parts.append(
-                        f"⚠️ <b>Lower confidence ({
-                            conf_pct:.0f}%)</b> - Proceed with caution, consider smaller position.")
+                        f"⚠️ <b>Lower confidence ({conf_pct:.0f}%)</b> - "
+                        f"Proceed with caution, consider smaller position.")
 
             # Enhanced historical performance commentary with sample size awareness
             if pair_stats and pair_stats['total_trades'] >= 3:
@@ -206,13 +206,15 @@ class AICommentaryGenerator:
 
                 if win_rate >= thresholds['good_win_rate']:
                     parts.append(
-                        f"✅ <b>{symbol} historically strong</b> ({win_rate:.0f}% win rate, {total_trades} trades - {reliability} data)")
+                        f"✅ <b>{symbol} historically strong</b> "
+                        f"({win_rate:.0f}% win rate, {total_trades} trades - {reliability} data)")
                 elif win_rate >= thresholds['poor_win_rate']:
                     parts.append(
                         f"📊 <b>{symbol} mixed performance</b> ({win_rate:.0f}% win rate, {total_trades} trades)")
                 else:
                     parts.append(
-                        f"⚠️ <b>{symbol} challenging pair</b> ({win_rate:.0f}% win rate, {total_trades} trades - consider avoiding)")
+                        f"⚠️ <b>{symbol} challenging pair</b> "
+                        f"({win_rate:.0f}% win rate, {total_trades} trades - consider avoiding)")
 
                 # Add average P&L context
                 if avg_pnl != 0:
@@ -235,12 +237,49 @@ class AICommentaryGenerator:
                         f"⚡ <b>{side} trades challenging</b> on this pair ({side_win_rate:.0f}% win rate)")
                 else:
                     parts.append(
-                        f"🔍 <b>{side} trades struggling</b> on this pair ({side_win_rate:.0f}% win rate - consider avoiding {side}s)")
+                        f"🔍 <b>{side} trades struggling</b> on this pair "
+                        f"({side_win_rate:.0f}% win rate - consider avoiding {side}s)")
 
             # Enhanced tactic commentary with more detail
             tactic = self._get_enhanced_tactic_comment(symbol, side, confidence, pair_stats)
             if tactic:
                 parts.append(tactic)
+
+            # ML Enhancement section
+            if signal_data and signal_data.get('ml_reasoning'):
+                reasoning = signal_data['ml_reasoning']
+                ml_adjustment = signal_data.get('ml_adjustment', 0)
+                ml_parts = []
+
+                news_boost = reasoning.get('news_sentiment', 0)
+                if news_boost != 0:
+                    sentiment_label = "bullish" if news_boost > 0 else "bearish"
+                    bullish_c = reasoning.get('bullish_count', 0)
+                    bearish_c = reasoning.get('bearish_count', 0)
+                    ml_parts.append(
+                        f"📰 Recent news: {sentiment_label} ({news_boost:+d} boost)"
+                        f" - {bullish_c} bullish, {bearish_c} bearish articles"
+                    )
+
+                pattern_boost = reasoning.get('pattern_match', 0)
+                if pattern_boost != 0:
+                    matches = reasoning.get('matches', 0)
+                    wins = reasoning.get('wins', 0)
+                    avg_pnl = reasoning.get('avg_pnl', 0.0)
+                    ml_parts.append(
+                        f"🔍 Similar patterns: {matches} found, "
+                        f"{wins}/{matches} profitable ({pattern_boost:+d} boost)"
+                        f" - Avg profit: ${avg_pnl:.2f}"
+                    )
+
+                sym_boost = reasoning.get('symbol_stats', 0)
+                if sym_boost != 0:
+                    ml_parts.append(f"📊 Symbol history: {sym_boost:+d} adjustment")
+
+                if ml_parts:
+                    adj_sign = f"+{ml_adjustment}" if ml_adjustment >= 0 else str(ml_adjustment)
+                    parts.append(f"🤖 <b>ML Enhancement ({adj_sign}):</b>")
+                    parts.extend(ml_parts)
 
             if parts:
                 header = self._t('ai_insight')
@@ -285,14 +324,17 @@ class AICommentaryGenerator:
                     parts.append(f"✅ <b>Good trade!</b> {pnl_percent:.1f}% solid profit captured.")
                 elif pnl_percent > 0.5:
                     parts.append(
-                        f"👍 <b>Profitable trade</b> - {pnl_percent:.1f}% gain. Small but consistent wins build success.")
+                        f"👍 <b>Profitable trade</b> - {pnl_percent:.1f}% gain. "
+                        f"Small but consistent wins build success.")
                 else:
                     parts.append(
-                        f"✓ <b>Minor profit</b> - {pnl_percent:.1f}% gain. Consider longer hold times for better returns.")
+                        f"✓ <b>Minor profit</b> - {pnl_percent:.1f}% gain. "
+                        f"Consider longer hold times for better returns.")
             elif pnl < 0:
                 if pnl_percent < -10:
                     parts.append(
-                        f"🚨 <b>Large loss</b> - {abs(pnl_percent):.1f}% loss. Review entry criteria and stop-loss placement.")
+                        f"🚨 <b>Large loss</b> - {abs(pnl_percent):.1f}% loss. "
+                        f"Review entry criteria and stop-loss placement.")
                 elif pnl_percent < -5:
                     parts.append(
                         f"⚠️ <b>Significant loss</b> - {abs(pnl_percent):.1f}% loss. Consider tighter risk management.")
@@ -431,20 +473,20 @@ class AICommentaryGenerator:
 
                 if weekly_pnl > 100:
                     parts.append(
-                        f"🚀 <b>Excellent week!</b> ${weekly_pnl:,.2f} ({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
+                        f"🚀 <b>Excellent week!</b> ${weekly_pnl:,.2f} "
+                        f"({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 elif weekly_pnl > 0:
                     parts.append(
-                        f"📈 <b>Week trending positive:</b> ${
-                            weekly_pnl:,.2f} ({
-                            win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
+                        f"📈 <b>Week trending positive:</b> ${weekly_pnl:,.2f} "
+                        f"({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 elif weekly_pnl > -50:
                     parts.append(
-                        f"📊 <b>Week slightly negative:</b> ${
-                            abs(weekly_pnl):,.2f} ({
-                            win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
+                        f"📊 <b>Week slightly negative:</b> ${abs(weekly_pnl):,.2f} "
+                        f"({win_rate_7d:.0f}% win rate, {total_trades_7d} trades)")
                 else:
                     parts.append(
-                        f"⚠️ <b>Difficult week:</b> ${abs(weekly_pnl):,.2f} ({win_rate_7d:.0f}% win rate - review needed)")
+                        f"⚠️ <b>Difficult week:</b> ${abs(weekly_pnl):,.2f} "
+                        f"({win_rate_7d:.0f}% win rate - review needed)")
 
                 # Profit factor insight
                 if profit_factor_7d and profit_factor_7d > 0:
@@ -465,7 +507,8 @@ class AICommentaryGenerator:
                 if sharpe is not None:
                     if sharpe > 3:
                         parts.append(
-                            f"⭐ <b>Exceptional risk-adjusted returns</b> (Sharpe: {sharpe:.2f}) - World-class performance!")
+                            f"⭐ <b>Exceptional risk-adjusted returns</b> "
+                            f"(Sharpe: {sharpe:.2f}) - World-class performance!")
                     elif sharpe > 2:
                         parts.append(
                             f"⭐ <b>Excellent risk-adjusted returns</b> (Sharpe: {sharpe:.2f}) - Outstanding!")
@@ -477,7 +520,8 @@ class AICommentaryGenerator:
                             f"📊 <b>Moderate risk-adjusted returns</b> (Sharpe: {sharpe:.2f}) - Room for improvement.")
                     else:
                         parts.append(
-                            f"⚠️ <b>Poor risk-adjusted returns</b> (Sharpe: {sharpe:.2f}) - Risk not justified by returns.")
+                            f"⚠️ <b>Poor risk-adjusted returns</b> "
+                            f"(Sharpe: {sharpe:.2f}) - Risk not justified by returns.")
 
                 if max_dd and max_dd > 0:
                     if max_dd < 5:
@@ -489,7 +533,8 @@ class AICommentaryGenerator:
                         parts.append(f"📊 <b>Acceptable drawdown</b> ({max_dd:.1f}% max drawdown)")
                     elif max_dd < 30:
                         parts.append(
-                            f"⚠️ <b>Elevated drawdown</b> ({max_dd:.1f}% max drawdown) - Consider reducing position sizes")
+                            f"⚠️ <b>Elevated drawdown</b> ({max_dd:.1f}% max drawdown) "
+                            f"- Consider reducing position sizes")
                     else:
                         parts.append(
                             f"🚨 <b>High drawdown alert</b> ({max_dd:.1f}% max drawdown) - Urgent risk review needed!")
@@ -537,11 +582,12 @@ class AICommentaryGenerator:
                             f"({win_rate_30d:.0f}% win rate)")
                 elif monthly_pnl > 0:
                     parts.append(
-                        f"📅 <b>Monthly performance:</b> ${
-                            monthly_pnl:,.2f} profit ({win_rate_30d:.0f}% win rate)")
+                        f"📅 <b>Monthly performance:</b> ${monthly_pnl:,.2f} profit "
+                        f"({win_rate_30d:.0f}% win rate)")
                 else:
                     parts.append(
-                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss ({win_rate_30d:.0f}% win rate)")
+                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss "
+                        f"({win_rate_30d:.0f}% win rate)")
 
                 if profit_factor_30d and profit_factor_30d > 0:
                     if profit_factor_30d > 2.5:
@@ -563,7 +609,8 @@ class AICommentaryGenerator:
 
                 if open_positions >= max_positions:
                     parts.append(
-                        f"⚠️ <b>Maximum positions active</b> ({open_positions}/{max_positions}) - At capacity, no new entries.")
+                        f"⚠️ <b>Maximum positions active</b> ({open_positions}/{max_positions}) "
+                        f"- At capacity, no new entries.")
                 elif utilization > 70:
                     parts.append(
                         f"👀 <b>High utilization</b> ({open_positions}/{max_positions} positions) - Monitor closely.")
@@ -640,7 +687,10 @@ class AICommentaryGenerator:
 
             # Strong improvement trend
             if win_rate_7d > win_rate_30d + 15 and profit_factor_7d > 1.5:
-                return "🚀 <b>Momentum building!</b> Recent optimizations driving strong results. Continue current approach with slight size increase."
+                return (
+                    "🚀 <b>Momentum building!</b> Recent optimizations driving strong results. "
+                    "Continue current approach with slight size increase."
+                )
 
             # Moderate improvement
             if win_rate_7d > win_rate_30d + 10:
@@ -648,19 +698,31 @@ class AICommentaryGenerator:
 
             # Declining trend - critical
             if win_rate_7d < win_rate_30d - 15 or (win_rate_7d < 40 and profit_factor_7d < 1):
-                return "🚨 <b>Urgent review needed:</b> Reduce trading frequency immediately. Focus only on highest-confidence (>85%) setups."
+                return (
+                    "🚨 <b>Urgent review needed:</b> Reduce trading frequency immediately. "
+                    "Focus only on highest-confidence (>85%) setups."
+                )
 
             # Declining trend - moderate
             if win_rate_7d < win_rate_30d - 10 and win_rate_7d < 50:
-                return "⚠️ <b>Recommendation:</b> Reduce position sizes by 30%. Focus on quality over quantity - only trade 75%+ confidence signals."
+                return (
+                    "⚠️ <b>Recommendation:</b> Reduce position sizes by 30%. "
+                    "Focus on quality over quantity - only trade 75%+ confidence signals."
+                )
 
             # High drawdown alert
             if max_dd > 25:
-                return "🚨 <b>Risk alert:</b> Drawdown elevated. Reduce all position sizes by 50% until drawdown recovers below 15%."
+                return (
+                    "🚨 <b>Risk alert:</b> Drawdown elevated. "
+                    "Reduce all position sizes by 50% until drawdown recovers below 15%."
+                )
 
             # Excellent performance - scale up carefully
             if win_rate_30d >= 70 and sharpe > 2 and profit_factor_30d > 2:
-                return "🎯 <b>Peak performance!</b> Strategy in optimal zone. Can consider 20% position size increase while maintaining discipline."
+                return (
+                    "🎯 <b>Peak performance!</b> Strategy in optimal zone. "
+                    "Can consider 20% position size increase while maintaining discipline."
+                )
 
             # Strong consistent performance
             if win_rate_30d >= 60 and profit_factor_30d > 1.5:
@@ -672,11 +734,17 @@ class AICommentaryGenerator:
 
             # Needs improvement but not critical
             if win_rate_30d >= 45:
-                return "📊 <b>Performance acceptable</b> - Minor tweaks needed. Review losing trades to identify improvements."
+                return (
+                    "📊 <b>Performance acceptable</b> - Minor tweaks needed. "
+                    "Review losing trades to identify improvements."
+                )
 
             # Poor performance
             if win_rate_30d < 40:
-                return "🔧 <b>Strategy optimization critical</b> - Review signal filters, entry/exit rules. Consider paper trading changes first."
+                return (
+                    "🔧 <b>Strategy optimization critical</b> - Review signal filters, entry/exit rules. "
+                    "Consider paper trading changes first."
+                )
 
             # Neutral/building
             return "📊 <b>Continue current approach</b> - Monitor performance and adjust as data accumulates."

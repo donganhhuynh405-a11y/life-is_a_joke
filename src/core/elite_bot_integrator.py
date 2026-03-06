@@ -200,14 +200,12 @@ class EliteBotIntegrator:
 
             if confirmed:
                 logger.info(
-                    f"✅ MTF Analysis CONFIRMS {
-                        signal_direction.upper()} signal for {symbol} " f"(Alignment: {
-                        trend_alignment:.2f}, Recommendation: {recommendation})")
+                    f"✅ MTF Analysis CONFIRMS {signal_direction.upper()} signal for {symbol} "
+                    f"(Alignment: {trend_alignment:.2f}, Recommendation: {recommendation})")
             else:
                 logger.warning(
-                    f"❌ MTF Analysis REJECTS {
-                        signal_direction.upper()} signal for {symbol} " f"(Alignment: {
-                        trend_alignment:.2f}, Recommendation: {recommendation})")
+                    f"❌ MTF Analysis REJECTS {signal_direction.upper()} signal for {symbol} "
+                    f"(Alignment: {trend_alignment:.2f}, Recommendation: {recommendation})")
 
             return confirmed, mtf_analysis
 
@@ -264,14 +262,10 @@ class EliteBotIntegrator:
             if updates:
                 updates['action'] = ','.join(actions) if actions else 'HOLD'
                 logger.info(
-                    f"🎯 Advanced Position Management for {symbol}: " f"Actions={
-                        updates.get('action')} " f"SL={
-                        updates.get(
-                            'stop_loss',
-                            'N/A')} " f"Partial={
-                        partial_tp.get(
-                            'close_percentage',
-                            0) * 100 if partial_tp else 0}%")
+                    f"🎯 Advanced Position Management for {symbol}: "
+                    f"Actions={updates.get('action')} "
+                    f"SL={updates.get('stop_loss', 'N/A')} "
+                    f"Partial={partial_tp.get('close_percentage', 0) * 100 if partial_tp else 0}%")
                 return updates
 
             return None

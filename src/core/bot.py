@@ -92,21 +92,12 @@ class TradingBot:
             self.logger.info("=" * 60)
             self.logger.info("🔍 ELITE AI ENABLED - Attempting initialization...")
             self.logger.info(
-                f"  ENABLE_ELITE_RISK_MANAGEMENT = {
-                    os.getenv(
-                        'ENABLE_ELITE_RISK_MANAGEMENT',
-                        'false')}")
+                f"  ENABLE_ELITE_RISK_MANAGEMENT = {os.getenv('ENABLE_ELITE_RISK_MANAGEMENT', 'false')}")
             self.logger.info(
-                f"  ENABLE_REGIME_DETECTION = {
-                    os.getenv(
-                        'ENABLE_REGIME_DETECTION',
-                        'false')}")
+                f"  ENABLE_REGIME_DETECTION = {os.getenv('ENABLE_REGIME_DETECTION', 'false')}")
             self.logger.info(f"  ENABLE_MTF_ANALYSIS = {os.getenv('ENABLE_MTF_ANALYSIS', 'false')}")
             self.logger.info(
-                f"  ENABLE_ELITE_POSITION_MGMT = {
-                    os.getenv(
-                        'ENABLE_ELITE_POSITION_MGMT',
-                        'false')}")
+                f"  ENABLE_ELITE_POSITION_MGMT = {os.getenv('ENABLE_ELITE_POSITION_MGMT', 'false')}")
             self.logger.info("=" * 60)
 
             try:
@@ -121,17 +112,13 @@ class TradingBot:
                 # Log Elite AI status
                 self.logger.info("🌟 Elite AI initialized - Advanced trading features active")
                 self.logger.info(
-                    f"  ✓ Elite Risk Management: {
-                        self.elite_integrator.elite_risk_mgr is not None}")
+                    f"  ✓ Elite Risk Management: {self.elite_integrator.elite_risk_mgr is not None}")
                 self.logger.info(
-                    f"  ✓ Regime Detection: {
-                        self.elite_integrator.regime_detector is not None}")
+                    f"  ✓ Regime Detection: {self.elite_integrator.regime_detector is not None}")
                 self.logger.info(
-                    f"  ✓ MTF Analysis: {
-                        self.elite_integrator.mtf_analyzer is not None}")
+                    f"  ✓ MTF Analysis: {self.elite_integrator.mtf_analyzer is not None}")
                 self.logger.info(
-                    f"  ✓ Elite Position Mgmt: {
-                        self.elite_integrator.elite_position_mgr is not None}")
+                    f"  ✓ Elite Position Mgmt: {self.elite_integrator.elite_position_mgr is not None}")
 
             except ImportError as e:
                 self.logger.warning(f"⚠️ Failed to import Elite AI modules: {e}")
@@ -156,10 +143,7 @@ class TradingBot:
                 self.logger.info("=" * 80)
                 self.logger.info("🚨 ATTEMPTING TO INITIALIZE NEWS AGGREGATOR...")
                 self.logger.info(
-                    f"   ENABLE_NEWS_ANALYSIS = {
-                        os.getenv(
-                            'ENABLE_NEWS_ANALYSIS',
-                            'not set')}")
+                    f"   ENABLE_NEWS_ANALYSIS = {os.getenv('ENABLE_NEWS_ANALYSIS', 'not set')}")
                 self.logger.info("=" * 80)
 
                 from news.news_aggregator import NewsAggregator
@@ -613,9 +597,9 @@ class TradingBot:
                                         trending = regime_data.get('trending', False)
                                         volatile = regime_data.get('volatile', False)
                                         self.logger.info(
-                                            f"  {symbol}: {
-                                                regime_name.upper()} " f"(Confidence: {
-                                                confidence:.1f}%, " f"Trending: {trending}, Volatile: {volatile})")
+                                            f"  {symbol}: {regime_name.upper()} "
+                                            f"(Confidence: {confidence:.1f}%, "
+                                            f"Trending: {trending}, Volatile: {volatile})")
                                         # Store for notification
                                         elite_ai_data['regimes'][symbol] = {
                                             'regime': regime_name.upper(),
@@ -637,8 +621,10 @@ class TradingBot:
                                     if mtf_data:
                                         alignment = mtf_data.get('trend_alignment', 0) * 100
                                         recommendation = mtf_data.get('recommendation', 'NEUTRAL')
-                                        self.logger.info(f"  {symbol}: Alignment {alignment:.0f}% "
-                                                         f"({recommendation}, {'ALIGNED' if is_valid else 'NOT ALIGNED'})")
+                                        self.logger.info(
+                                            f"  {symbol}: Alignment {alignment:.0f}% "
+                                            f"({recommendation}, "
+                                            f"{'ALIGNED' if is_valid else 'NOT ALIGNED'})")
                                         # Store for notification
                                         elite_ai_data['mtf_analysis'][symbol] = {
                                             'alignment': alignment,
@@ -665,8 +651,7 @@ class TradingBot:
                             elite_ai_data['monitored_positions'] = len(open_positions)
                             if open_positions:
                                 self.logger.info(
-                                    f"  Monitoring {
-                                        len(open_positions)} open positions")
+                                    f"  Monitoring {len(open_positions)} open positions")
                                 for pos in open_positions[:3]:  # Show first 3
                                     try:
                                         # Update elite position management
@@ -674,8 +659,7 @@ class TradingBot:
                                             pos)
                                         if updated:
                                             self.logger.info(
-                                                f"  Updated position {
-                                                    pos.get('symbol')}: {updated}")
+                                                f"  Updated position {pos.get('symbol')}: {updated}")
                                     except Exception as e:
                                         self.logger.error(
                                             f"Error updating position management: {e}")
@@ -721,16 +705,9 @@ class TradingBot:
                             news_summary['news_items'] = recent_news[:5]  # Top 5 most recent
 
                             self.logger.info(
-                                f"📊 News summary: {
-                                    news_summary.get(
-                                        'total_count',
-                                        0)} total, " f"Bullish: {
-                                    news_summary.get(
-                                        'bullish_count',
-                                        0)}, " f"Bearish: {
-                                    news_summary.get(
-                                        'bearish_count',
-                                        0)}")
+                                f"📊 News summary: {news_summary.get('total_count', 0)} total, "
+                                f"Bullish: {news_summary.get('bullish_count', 0)}, "
+                                f"Bearish: {news_summary.get('bearish_count', 0)}")
                         else:
                             self.logger.info("📰 No news in the last hour")
                             news_summary = {'total_count': 0, 'news_items': []}

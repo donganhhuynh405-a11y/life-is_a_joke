@@ -144,7 +144,11 @@ class Executor:
         # exchange_client expected to be ccxt instance or wrapper
         try:
             loop = asyncio.get_event_loop()
-            resp = await loop.run_in_executor(None, lambda: exchange_client.create_order(symbol, 'market' if price is None else 'limit', side, amount, price, params))
+            order_type = 'market' if price is None else 'limit'
+            resp = await loop.run_in_executor(
+                None,
+                lambda: exchange_client.create_order(symbol, order_type, side, amount, price, params)
+            )
             return resp
         except Exception as e:
             logger.exception('Order failed: %s', e)

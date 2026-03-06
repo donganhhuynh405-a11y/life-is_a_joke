@@ -184,8 +184,7 @@ class HybridPredictor:
                 min_volatility = self.config.trading.strategies.classic_macd_rsi.min_atr_pct
                 if signal.indicators['atr_percent'] < min_volatility:
                     logger.debug(
-                        f"Volatility {
-                            signal.indicators['atr_percent']}% below minimum {min_volatility}%")
+                        f"Volatility {signal.indicators['atr_percent']}% below minimum {min_volatility}%")
                     return False
 
             # Trend strength filter

@@ -34,19 +34,19 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 
 # Code quality
 lint: ## Run flake8 linter
-	flake8 src/ tests/ backtester/
+	flake8 src/ tests/ tools/
 
 lint-all: ## Run all linters
-	flake8 src/ tests/ backtester/
+	flake8 src/ tests/ tools/
 	pylint src/ --exit-zero
 
 format: ## Format code with black and isort
-	black src/ tests/ backtester/ scripts/
-	isort src/ tests/ backtester/ scripts/
+	black src/ tests/ tools/ scripts/
+	isort src/ tests/ tools/ scripts/
 
 format-check: ## Check formatting without making changes
-	black --check src/ tests/ backtester/
-	isort --check-only src/ tests/ backtester/
+	black --check src/ tests/ tools/
+	isort --check-only src/ tests/ tools/
 
 type-check: ## Run mypy type checker
 	mypy src/ --ignore-missing-imports
@@ -104,13 +104,13 @@ run-paper: ## Run bot in paper trading mode
 	ENVIRONMENT=paper python -m src.main
 
 run-backtest: ## Run backtesting
-	python -m backtester.cli
+	python -m tools.backtest.cli
 
 setup-dev: ## Setup development environment
-	bash scripts/setup_dev.sh
+	bash scripts/setup/setup_dev.sh
 
 migrate: ## Run database migrations
-	python scripts/migrate_db.py
+	python scripts/database/migrate_db.py
 
 api-docs: ## Generate API documentation
 	python scripts/generate_api_docs.py
@@ -119,10 +119,10 @@ perf-test: ## Run performance benchmarks
 	python scripts/performance_test.py
 
 backup: ## Backup data and models
-	bash scripts/backup_restore.sh backup
+	bash scripts/maintenance/backup_restore.sh backup
 
 restore: ## Restore from backup
-	bash scripts/backup_restore.sh restore
+	bash scripts/maintenance/backup_restore.sh restore
 
 # Reporting
 coverage-html: ## Open HTML coverage report

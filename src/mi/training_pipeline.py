@@ -122,9 +122,7 @@ class MLTrainingPipeline:
         if existing_model and not self.force_retrain:
             model, scaler, metrics = existing_model
             logger.info(
-                f"✅ Model already exists for {symbol} (accuracy: {
-                    metrics.get(
-                        'accuracy', 'N/A')})")
+                f"✅ Model already exists for {symbol} (accuracy: {metrics.get('accuracy', 'N/A')})")
             logger.info("   Skipping training (use force_retrain=True to retrain)")
             return None
 
@@ -138,8 +136,7 @@ class MLTrainingPipeline:
 
         if df is None or len(df) < self.trainer.min_training_samples:
             logger.error(
-                f"❌ Insufficient data for {symbol}: {
-                    len(df) if df is not None else 0} candles")
+                f"❌ Insufficient data for {symbol}: {len(df) if df is not None else 0} candles")
             raise ValueError("Not enough data for training")
 
         logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
@@ -183,9 +180,7 @@ class MLTrainingPipeline:
                 if result['status'] == 'success':
                     metrics = result['metrics']
                     logger.info(
-                        f"   • {symbol}: accuracy={
-                            metrics['accuracy']:.4f}, f1={
-                            metrics['f1_score']:.4f}")
+                        f"   • {symbol}: accuracy={metrics['accuracy']:.4f}, f1={metrics['f1_score']:.4f}")
 
         if self.training_stats['failed'] > 0:
             logger.info("\n❌ Failed models:")

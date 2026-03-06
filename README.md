@@ -223,7 +223,7 @@ sudo systemctl status trading-bot
 
 ```bash
 # Admin Panel (Interactive)
-./scripts/bot-admin.py
+./scripts/admin/bot-admin.py
 
 # Diagnostics & Health Check
 ./scripts/bot-diagnostics.py
@@ -242,7 +242,7 @@ git pull origin main
 sudo systemctl restart trading-bot
 
 # Backup Database
-./scripts/backup_database.sh
+./scripts/maintenance/backup_restore.sh backup
 
 # Generate Performance Report
 ./scripts/generate_report.py --period 30d
@@ -533,7 +533,7 @@ sudo journalctl -u trading-bot -f
 - 📊 [**ML Guide**](docs/ML_GUIDE.md) - Machine learning features
 - 📰 [**News Analysis**](docs/NEWS_ANALYSIS.md) - Sentiment analysis setup
 - 🎯 [**Elite AI Enhancements**](docs/ELITE_AI_ENHANCEMENTS.md) - Advanced features
-- 🔄 [**Updates Guide**](docs/UPDATES.md) - How to update
+- 🗂️ [**Documentation Index**](docs/README.md) - Full documentation navigation
 
 ### API Documentation
 

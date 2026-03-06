@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import uvicorn
-from backtester.engine import Backtester
+from tools.backtest.engine import Backtester
 from strategies import StrategyRegistry
 from pydantic import BaseModel
 

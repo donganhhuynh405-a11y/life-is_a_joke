@@ -226,7 +226,8 @@ class AdaptiveTacticsManager:
                     self.tactical_overrides['paused_since'][symbol] = datetime.now()
                     newly_paused.add(symbol)
                     adjustments.append(
-                        f"⛔ Pausing {symbol} - Consistently underperforming ({win_rate:.0f}% win rate, ${total_pnl:.2f} P&L)")
+                        f"⛔ Pausing {symbol} - Consistently underperforming "
+                        f"({win_rate:.0f}% win rate, ${total_pnl:.2f} P&L)")
 
                 elif should_resume and symbol in self.tactical_overrides['paused_symbols']:
                     self.tactical_overrides['paused_symbols'].discard(symbol)
@@ -262,9 +263,8 @@ class AdaptiveTacticsManager:
             elif max_dd < 5 and sharpe > 2.0:
                 new_max = min(10, current_max + 1)
                 adjustments.append(
-                    f"✅ Increasing max positions to {new_max} - Excellent risk management (DD: {
-                        max_dd:.1f}%, Sharpe: {
-                        sharpe:.2f})")
+                    f"✅ Increasing max positions to {new_max} - Excellent risk management "
+                    f"(DD: {max_dd:.1f}%, Sharpe: {sharpe:.2f})")
 
             if new_max and new_max != self.tactical_overrides.get('max_positions_override'):
                 self.tactical_overrides['max_positions_override'] = new_max
