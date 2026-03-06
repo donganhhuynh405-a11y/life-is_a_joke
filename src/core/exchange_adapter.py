@@ -47,6 +47,7 @@ class ExchangeAdapter:
                 'apiKey': self.config.exchange_api_key,
                 'secret': self.config.exchange_api_secret,
                 'enableRateLimit': True,
+                'timeout': 30000,
                 'options': {
                     'defaultType': 'spot',
                 }
@@ -63,7 +64,7 @@ class ExchangeAdapter:
                     exchange_config['sandbox'] = True
 
             self.exchange = exchange_class(exchange_config)
-            self.exchange.load_markets()
+            self._load_markets_with_retry()
 
             self.logger.info(f"Connected to {self.exchange_id} via CCXT")
             self.logger.info(f"Supported markets: {len(self.exchange.markets)}")
@@ -71,6 +72,33 @@ class ExchangeAdapter:
         except Exception as e:
             self.logger.error(f"Failed to initialize {self.exchange_id}: {str(e)}")
             raise
+
+    def _load_markets_with_retry(self, max_retries: int = 3, base_delay: float = 5.0):
+        """Load exchange markets with retry logic for transient network errors.
+
+        Args:
+            max_retries: Maximum number of retry attempts after the first try.
+            base_delay: Initial delay in seconds between retries (doubles each attempt).
+        """
+        import time
+        delay = base_delay
+        for attempt in range(max_retries + 1):
+            try:
+                self.exchange.load_markets()
+                return
+            except (ccxt.RequestTimeout, ccxt.NetworkError) as e:
+                if attempt < max_retries:
+                    self.logger.warning(
+                        f"load_markets() timed out (attempt {attempt + 1}/{max_retries + 1}), "
+                        f"retrying in {delay:.0f}s: {e}"
+                    )
+                    time.sleep(delay)
+                    delay *= 2
+                else:
+                    self.logger.error(
+                        f"load_markets() failed after {max_retries + 1} attempts: {e}"
+                    )
+                    raise
 
     def _init_binance_legacy(self):
         """Initialize Binance using legacy python-binance client (backward compatibility)"""
