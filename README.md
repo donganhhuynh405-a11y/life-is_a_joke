@@ -235,10 +235,8 @@ sudo journalctl -u trading-bot -f
 sudo systemctl restart trading-bot
 
 # Update to Latest Version
-cd /opt/Life_Is_A_Joke
-git fetch origin
-git checkout main
-git pull origin main
+cd /opt/trading-bot
+git pull
 sudo systemctl restart trading-bot
 
 # Backup Database
