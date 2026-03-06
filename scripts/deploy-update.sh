@@ -60,8 +60,8 @@ echo ""
 # Step 4: Update code
 print_info "Step 4/6: Updating code..."
 git fetch origin
-git checkout copilot/update-notification-format
-git pull origin copilot/update-notification-format
+git checkout main
+git pull origin main
 print_info "   ✅ Code updated"
 echo ""
 

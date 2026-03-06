@@ -81,7 +81,7 @@ echo ""
 
 # Step 5: Clone fresh code
 print_info "Step 5/6: Cloning fresh code..."
-sudo git clone -b copilot/update-notification-format https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
+sudo git clone -b main https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
 cd Life_Is_A_Joke
 
 print_info "   ✅ Code cloned"

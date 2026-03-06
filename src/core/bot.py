@@ -655,11 +655,21 @@ class TradingBot:
                                 for pos in open_positions[:3]:  # Show first 3
                                     try:
                                         # Update elite position management
+                                        symbol = pos.get('symbol')
+                                        if not symbol:
+                                            continue
+                                        try:
+                                            ticker = self.exchange.get_symbol_ticker(symbol)
+                                            current_price = float(ticker.get('price', 0))
+                                        except Exception as price_err:
+                                            self.logger.warning(
+                                                f"  Could not fetch price for {symbol}: {price_err}; skipping position update")
+                                            continue
                                         updated = self.elite_integrator.update_position_management(
-                                            pos)
+                                            symbol, pos, current_price)
                                         if updated:
                                             self.logger.info(
-                                                f"  Updated position {pos.get('symbol')}: {updated}")
+                                                f"  Updated position {symbol}: {updated}")
                                     except Exception as e:
                                         self.logger.error(
                                             f"Error updating position management: {e}")

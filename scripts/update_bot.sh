@@ -38,7 +38,7 @@ print_usage() {
 }
 
 # Parse optional --branch argument so the user can deploy a specific PR branch.
-# Usage: sudo ./scripts/update_bot.sh --branch copilot/update-notification-format
+# Usage: sudo ./scripts/update_bot.sh --branch main
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --branch|-b)

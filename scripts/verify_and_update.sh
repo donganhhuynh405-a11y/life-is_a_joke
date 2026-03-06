@@ -136,8 +136,8 @@ if [ "$NEEDS_UPDATE" = "1" ]; then
     echo "2. Обновите код:"
     echo "   cd $PROJECT_DIR"
     echo "   git fetch origin"
-    echo "   git checkout copilot/update-notification-format"
-    echo "   git pull origin copilot/update-notification-format"
+    echo "   git checkout main"
+    echo "   git pull origin main"
     echo ""
     echo "3. Проверьте обновление:"
     echo "   git log --oneline -1"
@@ -166,8 +166,8 @@ if [ "$NEEDS_UPDATE" = "1" ]; then
         
         echo "📥 Обновляем код..."
         git fetch origin
-        git checkout copilot/update-notification-format
-        git pull origin copilot/update-notification-format
+        git checkout main
+        git pull origin main
         
         echo "✅ Проверяем обновление..."
         UPDATED_COMMIT=$(git log --oneline -1)

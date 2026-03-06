@@ -52,7 +52,7 @@ echo ""
 
 # Step 3: Clone repository
 print_info "Step 3/8: Cloning repository..."
-git clone -b copilot/update-notification-format https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
+git clone -b main https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
 cd Life_Is_A_Joke
 print_info "   ✅ Repository cloned"
 echo ""
