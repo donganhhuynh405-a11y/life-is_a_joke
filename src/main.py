@@ -24,11 +24,16 @@ try:
     from core.config import Config
     from utils.logger import setup_logger
 except ImportError as e:
-    # Fallback: try absolute imports
+    # A missing dependency at import time would cause the container to exit
+    # instantly with code 1, making Docker restart it in a tight loop before
+    # any backoff can take effect.  Sleep 30s so the restart policy has time
+    # to slow down retries while the operator investigates the issue.
     print(f"Import error: {e}")
     print(f"Python path: {sys.path}")
     print(f"Current directory: {os.getcwd()}")
     print(f"Script location: {Path(__file__).parent}")
+    print("Sleeping 30s before exit so Docker restart policy can apply…")
+    time.sleep(30)
     sys.exit(1)
 
 

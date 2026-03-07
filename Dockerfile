@@ -13,21 +13,29 @@ COPY requirements.txt .
 # tensorflow-cpu: the standard tensorflow wheel on Linux installs cuda-bindings and
 #   cuda-pathfinder even on CPU-only hosts. tensorflow-cpu is the CPU-only variant
 #   (available for versions 2.15.x – 2.16.x) and provides the same Python API.
-RUN pip install --user --no-cache-dir \
+#
+# NOTE: Do NOT use "pip install --user" here. User-local packages are installed into
+#   /root/.local which is inaccessible to the non-root "trader" user in the runtime
+#   stage, causing every Python import to fail and the container to restart instantly.
+#   Install into the system site-packages (/usr/local/lib/python3.11/site-packages/)
+#   so that any user can import them.
+RUN pip install --no-cache-dir \
         "torch>=2.6.0" \
         --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip install --user --no-cache-dir "tensorflow-cpu>=2.15.0"
+RUN pip install --no-cache-dir "tensorflow-cpu>=2.15.0"
 
-RUN pip install --user --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim as runtime
 
 WORKDIR /app
-COPY --from=builder /root/.local /root/.local
+# Copy the packages installed into the system site-packages in the builder stage.
+# This makes them available to all users (including the non-root "trader" user below).
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 COPY . .
 
-ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Create non-root user
