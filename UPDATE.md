@@ -33,6 +33,38 @@ ERROR: Could not install packages due to an OSError: [Errno 28] No space left on
   `pip install -r requirements.txt`. Поскольку ограничение `torch>=2.6.0` уже выполнено,
   pip не перекачивает CUDA-вариант. Аналогично для `tensorflow-cpu`.
 
+### 3. Неверный путь `prometheus.yml` в `docker-compose.yml`
+
+Сервис Prometheus использовал монтирование:
+
+```yaml
+- ./prometheus.yml:/etc/prometheus/prometheus.yml
+```
+
+Файл `prometheus.yml` **не существует в корне** репозитория — он находится в
+`deployment/monitoring/prometheus.yml`. Docker Compose, не найдя файл по указанному пути,
+создавал вместо него **папку**, из-за чего монтирование завершалось ошибкой:
+
+```
+mount ... not a directory: Are you trying to mount a directory onto a file (or vice-versa)?
+```
+
+**Исправление:** путь обновлён до `./deployment/monitoring/prometheus.yml`.
+
+### 4. Конфликт порта Redis (6379) в `docker-compose.yml`
+
+Сервис Redis публиковал порт `6379:6379` на хосте. Если на сервере уже запущен другой
+Redis (или осталась предыдущая версия контейнера), это завершалось ошибкой:
+
+```
+failed to bind host port for 0.0.0.0:6379: address already in use
+```
+
+Публикация порта на хосте **не нужна**: торговый бот подключается к Redis через внутреннюю
+сеть Docker (`redis://redis:6379/0`). Внешний доступ к Redis также небезопасен.
+
+**Исправление:** блок `ports: ["6379:6379"]` удалён из сервиса `redis`.
+
 ---
 
 ## Требования к дисковому пространству

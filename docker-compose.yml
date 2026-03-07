@@ -2,7 +2,9 @@ version: '3.8'
 services:
   redis:
     image: redis:alpine
-    ports: ["6379:6379"]
+    # No host port binding: the bot connects via the internal Docker network
+    # (redis://redis:6379/0), so exposing 6379 on the host is unnecessary and
+    # causes "address already in use" errors if another Redis is already running.
     volumes: [redis_data:/data]
   
   postgres:
@@ -29,7 +31,7 @@ services:
     image: prom/prometheus
     ports: ["9090:9090"]
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
   
   grafana:
