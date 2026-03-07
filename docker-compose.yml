@@ -15,6 +15,7 @@ services:
   
   bot:
     build: .
+    container_name: trading-bot
     depends_on: [redis, postgres]
     volumes:
       - bot_data:/var/lib/trading-bot
