@@ -118,6 +118,24 @@ git fetch origin
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 print_status "Current branch: $CURRENT_BRANCH"
 
+# Step 4a: Stash any local modifications so git pull cannot fail due to conflicts
+# Use git status --porcelain to detect ALL local changes (modified, staged, untracked)
+if [ -z "$(git status --porcelain)" ]; then
+    print_status "No local changes to stash"
+else
+    print_warning "Local changes detected — stashing them so the pull can proceed..."
+    if git stash push --include-untracked -m "Auto-stash before update $(date)"; then
+        print_success "Local changes stashed"
+    else
+        print_error "git stash failed.  Cannot safely pull without losing local changes."
+        print_error "Please manually commit or discard your local changes and re-run this script:"
+        print_error "  git status  (to see what changed)"
+        print_error "  git stash   (to save changes)"
+        print_error "  git checkout -- <file>  (to discard a specific file)"
+        exit 1
+    fi
+fi
+
 # Step 5: Checkout and pull the target branch
 if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
     print_status "Switching to branch: $BRANCH"
@@ -128,11 +146,42 @@ print_status "Pulling latest changes..."
 git pull origin "$BRANCH"
 print_success "Repository updated to latest version"
 
+# Step 5a: Ensure all scripts in the repo are executable
+print_status "Ensuring scripts are executable..."
+chmod +x "$REPO_DIR"/scripts/*.sh 2>/dev/null || true
+print_success "Script permissions set"
+
+# Step 5b: Update the installed systemd service file to match the repo
+SERVICE_SRC="$REPO_DIR/deployment/systemd/trading-bot.service"
+SERVICE_DST="/etc/systemd/system/trading-bot.service"
+if [ -f "$SERVICE_SRC" ]; then
+    if ! diff -q "$SERVICE_SRC" "$SERVICE_DST" > /dev/null 2>&1; then
+        print_status "Updating systemd service file..."
+        cp "$SERVICE_SRC" "$SERVICE_DST"
+        systemctl daemon-reload
+        print_success "systemd service file updated and daemon reloaded"
+    else
+        print_status "systemd service file is already up to date"
+    fi
+fi
+
 # Step 6: Clean Python cache files
 print_status "Cleaning Python cache files..."
 find "$BOT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find "$BOT_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
 print_success "Cache files cleaned"
+
+# Step 6a: Ensure the virtual environment exists and install/update dependencies
+VENV_PYTHON="$BOT_DIR/venv/bin/python3"
+if [ ! -x "$VENV_PYTHON" ]; then
+    print_warning "Virtual environment not found or python3 missing — creating venv..."
+    python3 -m venv "$BOT_DIR/venv"
+    print_success "Virtual environment created"
+fi
+print_status "Updating Python dependencies..."
+"$BOT_DIR/venv/bin/pip" install --upgrade pip --quiet
+"$BOT_DIR/venv/bin/pip" install -r "$BOT_DIR/requirements.txt" --quiet
+print_success "Python dependencies installed"
 
 # Step 7: Set correct ownership
 print_status "Setting correct file ownership..."
