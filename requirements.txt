@@ -9,6 +9,7 @@ numpy>=1.24.0
 
 # Database
 SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.0
 
 # Web framework (optional)
 fastapi>=0.104.0

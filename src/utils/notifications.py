@@ -744,8 +744,7 @@ class TelegramNotifier:
             # correctly and simply waiting for a high-quality setup.
             if data_unchanged:
                 message += (
-                    f"\n📋 <i>{self.t('data_unchanged', 'Данные не изменились с прошлого отчёта — '
-                                     'бот работает в штатном режиме и сканирует рынок.')}</i>\n"
+                    f"\n📋 <i>{self.t('data_unchanged', 'Данные не изменились с прошлого отчёта — бот работает в штатном режиме и сканирует рынок.')}</i>\n"
                 )
 
             # Add total P/L if provided
