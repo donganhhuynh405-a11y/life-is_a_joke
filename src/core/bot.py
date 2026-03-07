@@ -55,8 +55,16 @@ class TradingBot:
 
             self.logger.info(f"Connected to {exchange_name} {testnet_str} ({mode_str})")
         except Exception as e:
-            self.logger.error(f"Failed to initialize exchange: {e}")
-            raise
+            if not config.trading_enabled:
+                # Trading is disabled — exchange connectivity is not required.
+                # Log a warning and continue so the container stays alive.
+                self.logger.warning(
+                    f"Exchange not available (trading is disabled, this is OK): {e}"
+                )
+                self.exchange = None
+            else:
+                self.logger.error(f"Failed to initialize exchange: {e}")
+                raise
 
         self.client = self.exchange
 
@@ -412,9 +420,19 @@ class TradingBot:
         self.running = True
 
         try:
-            # Get account info
-            account = self.exchange.get_account()
-            self.logger.info(f"Account status: Can trade: {account.get('canTrade', True)}")
+            # Get account info (skip when exchange is unavailable or trading disabled)
+            if self.exchange is not None:
+                try:
+                    account = self.exchange.get_account()
+                    self.logger.info(f"Account status: Can trade: {account.get('canTrade', True)}")
+                except Exception as e:
+                    if self.config.trading_enabled:
+                        raise
+                    self.logger.warning(
+                        f"Could not fetch account info (trading is disabled, this is OK): {e}"
+                    )
+            else:
+                self.logger.info("Exchange not connected — running in monitoring-only mode")
 
             # Main loop
             while self.running:

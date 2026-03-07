@@ -39,6 +39,9 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://trader:${DB_PASSWORD}@postgres:5432/trading
+      # Safe default: disable live trading until the user configures real API keys
+      # in their .env file.  Override with TRADING_ENABLED=true once configured.
+      - TRADING_ENABLED=${TRADING_ENABLED:-false}
     env_file: .env
     restart: unless-stopped
   

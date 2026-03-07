@@ -6,6 +6,7 @@ A Binance trading bot with automated trading strategies, risk management, and mo
 
 import os
 import sys
+import time
 import signal
 import logging
 from pathlib import Path
@@ -80,6 +81,12 @@ def main():
         logger.info("Shutdown requested by user")
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}", exc_info=True)
+        # Sleep before exiting so Docker's restart backoff policy has time to
+        # kick in.  Without this the container immediately re-exits and Docker
+        # can reach its restart limit very quickly, causing the container to
+        # enter the "Restarting" state indefinitely.
+        logger.info("Sleeping 30s before exit so Docker restart policy can apply…")
+        time.sleep(30)
         sys.exit(1)
     finally:
         logger.info("Trading bot stopped")
