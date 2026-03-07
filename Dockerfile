@@ -34,8 +34,10 @@ ENV PYTHONPATH=/app:$PYTHONPATH
 RUN useradd -m -u 1000 trader && chown -R trader:trader /app
 USER trader
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check: verify the bot's Prometheus metrics server is responding.
+# start-period gives the bot time to connect to the exchange and PostgreSQL
+# before the first check fires; failures within this window are not counted.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD python -c "import socket; socket.create_connection(('localhost', 8001), timeout=2)" || exit 1
 
 CMD ["python", "-m", "src.main"]

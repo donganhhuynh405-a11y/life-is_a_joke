@@ -212,6 +212,38 @@ class TradingBot:
 
         self.logger.info("Trading bot initialization complete")
 
+        # Initialize HealthMonitor (exposes Prometheus metrics on port 8001,
+        # required for the Docker HEALTHCHECK to pass)
+        self.health_monitor = None
+        try:
+            from health_monitor import HealthMonitor
+            self.health_monitor = HealthMonitor(config)
+            self.logger.info("Health monitor initialized")
+        except Exception as e:
+            self.logger.warning(f"Health monitor not available: {e}")
+
+    def _start_health_monitor_background(self):
+        """Start HealthMonitor in a background thread with its own event loop.
+
+        This exposes the Prometheus metrics HTTP server on port 8001, which is
+        what the Docker HEALTHCHECK probes.
+        """
+        if not self.health_monitor:
+            return
+
+        def run_health_monitor():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.health_monitor.start())
+                loop.run_forever()
+            except Exception as e:
+                self.logger.error(f"Error in health monitor thread: {e}", exc_info=True)
+
+        thread = threading.Thread(target=run_health_monitor, daemon=True, name='health-monitor')
+        thread.start()
+        self.logger.info("✅ Health monitor started on port 8001")
+
     def _start_ml_training_background(self):
         """Start ML model training in a background thread with its own event loop.
 
@@ -363,6 +395,9 @@ class TradingBot:
 
         # Start ML model training background task
         self._start_ml_training_background()
+
+        # Start HealthMonitor (opens port 8001 for Docker HEALTHCHECK)
+        self._start_health_monitor_background()
 
         # Send startup notification
         if self.notifier:
