@@ -42,7 +42,21 @@ services:
       # Safe default: disable live trading until the user configures real API keys
       # in their .env file.  Override with TRADING_ENABLED=true once configured.
       - TRADING_ENABLED=${TRADING_ENABLED:-false}
-    env_file: .env
+      # Exchange API credentials — empty by default; set in .env to enable trading
+      - BINANCE_API_KEY=${BINANCE_API_KEY:-}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET:-}
+      - EXCHANGE_API_KEY=${EXCHANGE_API_KEY:-}
+      - EXCHANGE_API_SECRET=${EXCHANGE_API_SECRET:-}
+      # Telegram notifications — optional
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # Environment tag
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    # env_file is intentionally omitted: Docker Compose v1 raises an error when
+    # the file does not exist, which would prevent the container from starting on
+    # a fresh deployment.  All required variables are forwarded above via the
+    # explicit environment: block, which uses ${VAR:-default} syntax so missing
+    # variables never cause a fatal error.
     restart: unless-stopped
   
   prometheus:

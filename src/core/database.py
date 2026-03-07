@@ -10,6 +10,12 @@ from typing import List, Dict, Optional
 from pathlib import Path
 
 from sqlalchemy import create_engine
+try:
+    from sqlalchemy import exc as sqlalchemy_exc
+    _SQLALCHEMY_ERRORS = (sqlalchemy_exc.DatabaseError, sqlalchemy_exc.OperationalError)
+except Exception:
+    # Fallback: catch any exception if the exc submodule is unavailable
+    _SQLALCHEMY_ERRORS = (Exception,)
 
 
 class Database:
@@ -20,36 +26,54 @@ class Database:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        # Try PostgreSQL first if DATABASE_URL exists
-        db_url = os.getenv('DATABASE_URL')
-        if db_url and 'postgresql' in db_url:
-            self.engine = create_engine(db_url)
-            self.conn = self.engine.raw_connection()
-            self.logger.info("Connected to PostgreSQL")
-        elif config.db_type == 'sqlite':
-            # Ensure directory exists
-            db_path = Path(config.db_path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Connect to database with proper settings for persistence
-            self.conn = sqlite3.connect(
-                config.db_path,
-                check_same_thread=False,
-                isolation_level=None  # Autocommit mode for immediate persistence
-            )
-            self.conn.row_factory = sqlite3.Row
-
-            # Enable WAL mode for better concurrency and persistence
-            self.conn.execute('PRAGMA journal_mode=WAL')
-            # Ensure data is written to disk immediately
-            self.conn.execute('PRAGMA synchronous=FULL')
-
-            self.logger.info(f"Connected to SQLite database: {config.db_path}")
-        else:
-            raise ValueError("Database type not configured")
+        if not self._try_postgres():
+            self._init_sqlite()
 
         # Initialize schema
         self._init_schema()
+
+    def _try_postgres(self) -> bool:
+        """Attempt to connect to PostgreSQL. Returns True on success."""
+        db_url = os.getenv('DATABASE_URL')
+        if not db_url or 'postgresql' not in db_url:
+            return False
+        try:
+            self.engine = create_engine(db_url)
+            # raw_connection() actually opens the network connection, so we call
+            # it here (not lazily) to detect auth/network failures immediately
+            # and fall back to SQLite before the bot starts trading.
+            self.conn = self.engine.raw_connection()
+            self.logger.info("Connected to PostgreSQL")
+            return True
+        except _SQLALCHEMY_ERRORS as pg_err:
+            self.logger.warning(
+                f"PostgreSQL unavailable ({pg_err}); falling back to SQLite"
+            )
+            return False
+        except Exception as pg_err:  # noqa: BLE001 — any DB init failure → SQLite
+            self.logger.warning(
+                f"PostgreSQL connection error ({pg_err}); falling back to SQLite"
+            )
+            return False
+
+    def _init_sqlite(self) -> None:
+        """Open a SQLite connection — works without any external services."""
+        db_path = Path(self.config.db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.conn = sqlite3.connect(
+            self.config.db_path,
+            check_same_thread=False,
+            isolation_level=None,  # Autocommit mode for immediate persistence
+        )
+        self.conn.row_factory = sqlite3.Row
+
+        # Enable WAL mode for better concurrency and persistence
+        self.conn.execute('PRAGMA journal_mode=WAL')
+        # Ensure data is written to disk immediately
+        self.conn.execute('PRAGMA synchronous=FULL')
+
+        self.logger.info(f"Connected to SQLite database: {self.config.db_path}")
 
     def _init_schema(self):
         """Initialize database schema"""
