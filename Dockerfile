@@ -2,6 +2,17 @@ FROM python:3.11-slim as builder
 
 WORKDIR /app
 COPY requirements.txt .
+
+# Install CPU-only PyTorch BEFORE requirements.txt.
+# The default PyPI wheel for torch on Linux bundles CUDA libraries (nvidia-cublas-cu12,
+# nvidia-cudnn-cu12, nvidia-nccl-cu12, etc.) that add ~2 GB to the build layer and
+# cause "No space left on device" on servers without a GPU.
+# Installing from the PyTorch CPU wheel index first satisfies the torch>=2.6.0
+# constraint in requirements.txt so pip will not re-download the CUDA variant.
+RUN pip install --user --no-cache-dir \
+        "torch>=2.6.0" \
+        --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim as runtime

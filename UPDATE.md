@@ -2,12 +2,48 @@
 
 ## Что было исправлено
 
-В `docker-compose.yml` добавлено `container_name: trading-bot`.  
+### 1. `container_name: trading-bot` в `docker-compose.yml`
+
 Без этого поля Docker Compose автоматически назначает контейнеру имя вроде
 `trading-bot_bot_1` (v1) или `trading-bot-bot-1` (v2), из-за чего `docker exec -it trading-bot …` завершается ошибкой:
 
 ```
 Error response from daemon: No such container: trading-bot
+```
+
+### 2. CPU-only PyTorch в `Dockerfile`
+
+`pip install torch` на Linux по умолчанию скачивает wheel с CUDA-библиотеками
+(nvidia-cublas-cu12, nvidia-cudnn-cu12, nvidia-nccl-cu12 и др.) — это **~2.5 ГБ дополнительно**.
+На сервере без видеокарты эти библиотеки не нужны, и Docker build завершался ошибкой:
+
+```
+ERROR: Could not install packages due to an OSError: [Errno 28] No space left on device
+```
+
+Теперь `Dockerfile` устанавливает torch из CPU-only wheel-индекса PyTorch **до** основного
+`pip install -r requirements.txt`. Поскольку ограничение `torch>=2.6.0` уже выполнено,
+pip не перекачивает CUDA-вариант.
+
+---
+
+## Требования к дисковому пространству
+
+| Вариант torch | Размер (installed) |
+|---|---|
+| PyPI (CUDA, по умолчанию) | ~2.5 ГБ |
+| CPU-only (после исправления) | ~200 МБ |
+
+Минимум свободного места для сборки образа: **3 ГБ** (CPU-only torch).
+
+Проверить место на диске:
+```bash
+df -h /var/lib/docker
+```
+
+Очистить кэш Docker при нехватке места:
+```bash
+docker system prune -f
 ```
 
 ---
@@ -31,6 +67,11 @@ docker compose version     # v2: "Docker Compose version v2.x.x"
 
 ```bash
 cd /opt/trading-bot
+
+# 0. Убедиться, что достаточно места на диске
+df -h /var/lib/docker
+# Если мало — очистить кэш Docker
+docker system prune -f
 
 # 1. Получить изменения из ветки с исправлением
 git fetch origin
