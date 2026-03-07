@@ -18,4 +18,4 @@ mkdir -p "$DATA_DIR"
 chown -R trader:trader "$DATA_DIR"
 
 # Drop to the non-root user and exec the application.
-exec su-exec trader "$@"
+exec gosu trader "$@"

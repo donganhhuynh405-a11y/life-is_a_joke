@@ -41,12 +41,14 @@ COPY . .
 ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONPATH=/root/.local/lib/python3.11/site-packages:/app:$PYTHONPATH
 
-# Install su-exec (tiny setuid helper used by the entrypoint to drop
-# from root to trader without a full shell session).  We also pre-create
-# the data directory so that the Docker volume is initialised with trader
-# ownership when the volume is first created (Docker copies the container's
-# directory — including its owner — into a newly created named volume).
-RUN apt-get update && apt-get install -y --no-install-recommends su-exec \
+# Install gosu (setuid helper used by the entrypoint to drop from root to
+# trader without a full shell session).  gosu is available in the Debian
+# trixie repository used by python:3.11-slim; su-exec is not.  We also
+# pre-create the data directory so that the Docker volume is initialised
+# with trader ownership when the volume is first created (Docker copies the
+# container's directory — including its owner — into a newly created named
+# volume).
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and set up owned directories
