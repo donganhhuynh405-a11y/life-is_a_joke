@@ -26,10 +26,10 @@
 
 ```bash
 # Поднять стек (включает обучение при первом запуске)
-docker compose up -d
+docker-compose up -d
 
-# Посмотреть логи обучения
-docker compose logs -f trading-bot | grep -E "🎓|📥|✅|❌|epoch"
+# Посмотреть логи обучения (имя сервиса в docker-compose.yml — bot)
+docker-compose logs -f bot | grep -E "🎓|📥|✅|❌|epoch"
 ```
 
 Переменные окружения в `.env`:
@@ -222,8 +222,8 @@ docker exec trading-bot python scripts/run_training.py --symbols BTCUSDT --force
 ## Если что-то пошло не так
 
 ```bash
-# Посмотреть логи обучения
-docker compose logs trading-bot | grep -E "ERROR|FAIL|❌"
+# Посмотреть логи обучения (имя сервиса в docker-compose.yml — bot)
+docker-compose logs bot | grep -E "ERROR|FAIL|❌"
 
 # Проверить статус через API
 curl http://localhost:8080/api/v1/ml/training/status
