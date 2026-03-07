@@ -649,11 +649,11 @@ source venv/bin/activate
 
 # If this is a fresh clone:
 git fetch origin
-git checkout copilot/update-notification-format
-git pull origin copilot/update-notification-format
+git checkout main
+git pull origin main
 
 # If the bot is already on this branch:
-git pull origin copilot/update-notification-format
+git pull origin main
 ```
 
 ### Step 2 — Install / update dependencies

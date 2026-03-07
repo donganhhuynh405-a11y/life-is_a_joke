@@ -104,20 +104,24 @@ class Config:
         self.app_dir = os.getenv('APP_DIR', '/opt/trading-bot')
         self.data_dir = os.getenv('DATA_DIR', '/var/lib/trading-bot')
         self.config_dir = os.getenv('CONFIG_DIR', '/etc/trading-bot')
+        self.models_dir = os.getenv('ML_MODELS_DIR', '/var/lib/trading-bot/models')
 
     def validate(self) -> bool:
         """Validate configuration"""
         errors = []
 
-        # Validate exchange API credentials
-        api_key = self.exchange_api_key if self.use_ccxt else self.binance_api_key
-        api_secret = self.exchange_api_secret if self.use_ccxt else self.binance_api_secret
+        # Only require valid exchange credentials when trading is actually enabled.
+        # When trading is disabled the bot runs in monitoring/reporting mode and
+        # does not need to place or manage orders, so missing credentials are fine.
+        if self.trading_enabled:
+            api_key = self.exchange_api_key if self.use_ccxt else self.binance_api_key
+            api_secret = self.exchange_api_secret if self.use_ccxt else self.binance_api_secret
 
-        if not api_key or api_key.startswith('your_'):
-            errors.append("Exchange API key not configured")
+            if not api_key or api_key.startswith('your_'):
+                errors.append("Exchange API key not configured")
 
-        if not api_secret or api_secret.startswith('your_'):
-            errors.append("Exchange API secret not configured")
+            if not api_secret or api_secret.startswith('your_'):
+                errors.append("Exchange API secret not configured")
 
         if self.max_position_size <= 0:
             errors.append("MAX_POSITION_SIZE must be greater than 0")

@@ -1,6 +1,7 @@
 [Unit]
 Description=Trading Bot Service
-After=network.target
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
@@ -8,9 +9,15 @@ User=tradingbot
 Group=tradingbot
 WorkingDirectory=/opt/trading-bot
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/src/main.py
+Environment="PYTHONPATH=/opt/trading-bot/src:/opt/trading-bot"
+
+# start_bot.sh checks that venv/bin/python3 exists and rebuilds it if absent,
+# then exec's into python3 src/main.py.  This prevents status=203/EXEC.
+ExecStart=/opt/trading-bot/scripts/start_bot.sh
 Restart=on-failure
 RestartSec=10
+# Allow extra time if venv needs to be rebuilt on first start
+TimeoutStartSec=180
 StandardOutput=journal
 StandardError=journal
 

@@ -2,8 +2,15 @@ version: '3.8'
 services:
   redis:
     image: redis:alpine
-    ports: ["6379:6379"]
+    # No host port binding: the bot connects via the internal Docker network
+    # (redis://redis:6379/0), so exposing 6379 on the host is unnecessary and
+    # causes "address already in use" errors if another Redis is already running.
     volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
   
   postgres:
     image: postgres:15
@@ -12,20 +19,52 @@ services:
       POSTGRES_USER: trader
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d trading"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   
   bot:
     build: .
-    depends_on: [redis, postgres]
+    container_name: trading-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - bot_data:/var/lib/trading-bot
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://trader:${DB_PASSWORD}@postgres/trading
-    env_file: .env
+      - DATABASE_URL=postgresql://trader:${DB_PASSWORD}@postgres:5432/trading
+      # Safe default: disable live trading until the user configures real API keys
+      # in their .env file.  Override with TRADING_ENABLED=true once configured.
+      - TRADING_ENABLED=${TRADING_ENABLED:-false}
+      # Exchange API credentials — empty by default; set in .env to enable trading
+      - BINANCE_API_KEY=${BINANCE_API_KEY:-}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET:-}
+      - EXCHANGE_API_KEY=${EXCHANGE_API_KEY:-}
+      - EXCHANGE_API_SECRET=${EXCHANGE_API_SECRET:-}
+      # Telegram notifications — optional
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # Environment tag
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    # env_file is intentionally omitted: Docker Compose v1 raises an error when
+    # the file does not exist, which would prevent the container from starting on
+    # a fresh deployment.  All required variables are forwarded above via the
+    # explicit environment: block, which uses ${VAR:-default} syntax so missing
+    # variables never cause a fatal error.
     restart: unless-stopped
   
   prometheus:
     image: prom/prometheus
     ports: ["9090:9090"]
-    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml]
+    volumes:
+      - ./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
   
   grafana:
     image: grafana/grafana
@@ -37,4 +76,6 @@ services:
 volumes:
   redis_data:
   postgres_data:
+  prometheus_data:
   grafana_data:
+  bot_data:

@@ -319,3 +319,43 @@ class PredictionResponse(BaseModel):
     price_target: Optional[float] = None
     model: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# ML Training progress
+# ---------------------------------------------------------------------------
+
+
+class TrainingSymbolResult(BaseModel):
+    """Per-symbol training outcome."""
+    status: str                         # success | skipped | failed
+    metrics: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    duration_s: Optional[float] = None
+
+
+class TrainingStatusResponse(BaseModel):
+    """Live status of the ML training pipeline."""
+    status: str                         # idle | running | done | failed
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    symbols_total: int = 0
+    symbols_done: int = 0
+    symbols_successful: int = 0
+    symbols_skipped: int = 0
+    symbols_failed: int = 0
+    current_symbol: Optional[str] = None
+    current_phase: Optional[str] = None
+    progress_pct: float = 0.0
+    eta_seconds: Optional[float] = None
+    results: Dict[str, TrainingSymbolResult] = Field(default_factory=dict)
+    log: List[str] = Field(default_factory=list)
+
+
+class TrainingStartRequest(BaseModel):
+    """Request body for POST /ml/training/start."""
+    force_retrain: bool = Field(False, description="Force re-training of existing models")
+    symbols: Optional[List[str]] = Field(
+        None,
+        description="Override the list of symbols to train (uses bot config if omitted)",
+    )

@@ -31,18 +31,62 @@ class HistoricalDataFetcher:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Даты первого появления основных криптовалют на Binance
+        # Dates when each pair first appeared on Binance.
+        # These are used to download the maximum possible historical depth
+        # so the model can learn from every market cycle the coin has seen.
         self.symbol_launch_dates = {
-            'BTCUSDT': '2017-08-17',  # BTC торгуется с начала Binance
-            'ETHUSDT': '2017-08-17',  # ETH также с начала
-            'BNBUSDT': '2017-11-06',  # BNB ICO
-            'ADAUSDT': '2018-04-17',  # ADA листинг
-            'SOLUSDT': '2020-08-11',  # SOL листинг
-            'XRPUSDT': '2018-05-04',  # XRP листинг
-            'DOTUSDT': '2020-08-19',  # DOT листинг
-            'DOGEUSDT': '2019-07-05',  # DOGE листинг
-            'AVAXUSDT': '2020-09-22',  # AVAX листинг
-            'MATICUSDT': '2019-04-26',  # MATIC листинг
+            # ── Major BTC/ETH ──────────────────────────────────────────────
+            'BTCUSDT':   '2017-08-17',
+            'ETHUSDT':   '2017-08-17',
+            'BNBUSDT':   '2017-11-06',
+            # ── Layer-1 / Smart-contract platforms ──────────────────────────
+            'ADAUSDT':   '2018-04-17',
+            'SOLUSDT':   '2020-08-11',
+            'DOTUSDT':   '2020-08-19',
+            'AVAXUSDT':  '2020-09-22',
+            'MATICUSDT': '2019-04-26',
+            'NEARUSDT':  '2020-10-16',
+            'FTMUSDT':   '2019-06-12',
+            'ALGOUSDT':  '2019-06-22',
+            'ATOMUSDT':  '2019-04-22',
+            'LTCUSDT':   '2017-12-13',
+            'TRXUSDT':   '2018-06-11',
+            'XLMUSDT':   '2018-01-05',
+            'VETUSDT':   '2019-07-01',
+            'HBARUSDT':  '2020-09-17',
+            'ICPUSDT':   '2021-05-10',
+            'FILUSDT':   '2020-10-15',
+            'EGLDUSDT':  '2020-09-03',
+            'FLOWUSDT':  '2021-04-07',
+            'THETAUSDT': '2019-01-17',
+            'AXSUSDT':   '2020-11-04',
+            'SANDUSDT':  '2020-08-14',
+            'MANAUSDT':  '2020-08-06',
+            'GALAUSDT':  '2021-09-16',
+            'APEUSDT':   '2022-03-17',
+            'OPUSDT':    '2022-06-01',
+            'ARBUSDT':   '2023-03-23',
+            'SEIUSDT':   '2023-08-15',
+            'SUIUSDT':   '2023-05-03',
+            # ── DeFi ────────────────────────────────────────────────────────
+            'UNIUSDT':   '2020-09-17',
+            'AAVEUSDT':  '2020-10-16',
+            'MKRUSDT':   '2019-04-26',
+            'COMPUSDT':  '2020-06-23',
+            'SNXUSDT':   '2019-01-24',
+            'CRVUSDT':   '2020-08-14',
+            '1INCHUSDT': '2021-01-11',
+            'LDOUSDT':   '2023-02-09',
+            # ── Meme / high-volatility ───────────────────────────────────────
+            'DOGEUSDT':  '2019-07-05',
+            'SHIBUSDT':  '2021-05-11',
+            'PEPEUSDT':  '2023-05-05',
+            # ── Layer-2 ──────────────────────────────────────────────────────
+            'IMXUSDT':   '2021-11-24',
+            # ── Payments / utility ───────────────────────────────────────────
+            'XRPUSDT':   '2018-05-04',
+            'LINKUSDT':  '2017-11-22',
+            'LTCUSDT':   '2017-12-13',
         }
 
         # Стандартная дата для неизвестных символов (начало Binance)
@@ -135,7 +179,7 @@ class HistoricalDataFetcher:
                     symbol=symbol,
                     interval=timeframe,
                     limit=limit,
-                    start_time=int(current_start.timestamp() * 1000)
+                    startTime=int(current_start.timestamp() * 1000)
                 )
 
                 if not candles or len(candles) == 0:
@@ -282,7 +326,7 @@ class HistoricalDataFetcher:
                 symbol=symbol,
                 interval=timeframe,
                 limit=1000,
-                start_time=int(last_timestamp.timestamp() * 1000)
+                startTime=int(last_timestamp.timestamp() * 1000)
             )
 
             if candles and len(candles) > 0:

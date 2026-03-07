@@ -4,43 +4,76 @@ Handles all database operations for trading history, positions, and analytics
 """
 
 import logging
+import os
 import sqlite3
 from typing import List, Dict, Optional
 from pathlib import Path
 
+from sqlalchemy import create_engine
+try:
+    from sqlalchemy import exc as sqlalchemy_exc
+    _SQLALCHEMY_ERRORS = (sqlalchemy_exc.DatabaseError, sqlalchemy_exc.OperationalError)
+except Exception:
+    # Fallback: catch any exception if the exc submodule is unavailable
+    _SQLALCHEMY_ERRORS = (Exception,)
+
 
 class Database:
-    """Database manager for SQLite"""
+    """Database manager for SQLite and PostgreSQL"""
 
     def __init__(self, config):
         """Initialize database connection"""
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        if config.db_type == 'sqlite':
-            # Ensure directory exists
-            db_path = Path(config.db_path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Connect to database with proper settings for persistence
-            self.conn = sqlite3.connect(
-                config.db_path,
-                check_same_thread=False,
-                isolation_level=None  # Autocommit mode for immediate persistence
-            )
-            self.conn.row_factory = sqlite3.Row
-
-            # Enable WAL mode for better concurrency and persistence
-            self.conn.execute('PRAGMA journal_mode=WAL')
-            # Ensure data is written to disk immediately
-            self.conn.execute('PRAGMA synchronous=FULL')
-
-            self.logger.info(f"Connected to SQLite database: {config.db_path}")
-        else:
-            raise NotImplementedError(f"Database type {config.db_type} not implemented")
+        if not self._try_postgres():
+            self._init_sqlite()
 
         # Initialize schema
         self._init_schema()
+
+    def _try_postgres(self) -> bool:
+        """Attempt to connect to PostgreSQL. Returns True on success."""
+        db_url = os.getenv('DATABASE_URL')
+        if not db_url or 'postgresql' not in db_url:
+            return False
+        try:
+            self.engine = create_engine(db_url)
+            # raw_connection() actually opens the network connection, so we call
+            # it here (not lazily) to detect auth/network failures immediately
+            # and fall back to SQLite before the bot starts trading.
+            self.conn = self.engine.raw_connection()
+            self.logger.info("Connected to PostgreSQL")
+            return True
+        except _SQLALCHEMY_ERRORS as pg_err:
+            self.logger.warning(
+                f"PostgreSQL unavailable ({pg_err}); falling back to SQLite"
+            )
+            return False
+        except Exception as pg_err:  # noqa: BLE001 — any DB init failure → SQLite
+            self.logger.warning(
+                f"PostgreSQL connection error ({pg_err}); falling back to SQLite"
+            )
+            return False
+
+    def _init_sqlite(self) -> None:
+        """Open a SQLite connection — works without any external services."""
+        db_path = Path(self.config.db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.conn = sqlite3.connect(
+            self.config.db_path,
+            check_same_thread=False,
+            isolation_level=None,  # Autocommit mode for immediate persistence
+        )
+        self.conn.row_factory = sqlite3.Row
+
+        # Enable WAL mode for better concurrency and persistence
+        self.conn.execute('PRAGMA journal_mode=WAL')
+        # Ensure data is written to disk immediately
+        self.conn.execute('PRAGMA synchronous=FULL')
+
+        self.logger.info(f"Connected to SQLite database: {self.config.db_path}")
 
     def _init_schema(self):
         """Initialize database schema"""
@@ -49,7 +82,7 @@ class Database:
         # Trades table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 order_id TEXT UNIQUE,
@@ -59,15 +92,16 @@ class Database:
                 commission_asset TEXT,
                 profit_loss REAL,
                 strategy TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'completed'
             )
         ''')
 
-        # Positions table
+        # Positions table (exit_price and pnl are included inline so the
+        # ALTER TABLE migration stanzas below are no-ops on a fresh install)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 entry_price REAL NOT NULL,
@@ -77,36 +111,13 @@ class Database:
                 current_price REAL,
                 profit_loss REAL,
                 status TEXT DEFAULT 'open',
-                opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                closed_at DATETIME,
+                opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                closed_at TIMESTAMP,
                 exit_price REAL,
+                pnl REAL,
                 strategy TEXT
             )
         ''')
-
-        try:
-            cursor.execute("ALTER TABLE positions ADD COLUMN exit_price REAL")
-            self.logger.info("Added exit_price column to positions table")
-        except sqlite3.OperationalError:
-            pass
-
-        try:
-            cursor.execute("ALTER TABLE positions ADD COLUMN pnl REAL")
-            self.logger.info("Added pnl column to positions table")
-        except sqlite3.OperationalError:
-            pass
-
-        # Fix invalid zero-date timestamps written by older bot versions
-        try:
-            cursor.execute(
-                "UPDATE positions SET closed_at = NULL WHERE closed_at = '0000-00-00 00:00:00'"
-            )
-            if cursor.rowcount > 0:
-                self.logger.info(
-                    f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
-                )
-        except sqlite3.OperationalError:
-            pass
 
         # Daily stats table
         cursor.execute('''
@@ -122,13 +133,53 @@ class Database:
         # Balance snapshots table - records USDT balance at a point in time
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS balance_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 balance_usdt REAL NOT NULL,
-                recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
+        # Commit the table structure before running migrations.
+        # psycopg2 (PostgreSQL) puts the connection in ABORTED state after any
+        # failed query; committing here ensures the tables above are durable and
+        # that a rollback triggered by a migration failure does not undo them.
         self.conn.commit()
+
+        # --- Migrations: add optional columns to existing tables ---
+        # Each migration runs in its own mini-transaction so that a failure
+        # (e.g. column already exists) only rolls back that one statement, not
+        # the entire schema initialisation. The rollback call resets psycopg2's
+        # error state; sqlite3 in autocommit mode ignores it safely.
+        try:
+            cursor.execute("ALTER TABLE positions ADD COLUMN exit_price REAL")
+            self.logger.info("Added exit_price column to positions table")
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping exit_price column addition: {e}")
+
+        try:
+            cursor.execute("ALTER TABLE positions ADD COLUMN pnl REAL")
+            self.logger.info("Added pnl column to positions table")
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping pnl column addition: {e}")
+
+        # Fix invalid zero-date timestamps written by older bot versions
+        try:
+            cursor.execute(
+                "UPDATE positions SET closed_at = NULL WHERE closed_at = '0000-00-00 00:00:00'"
+            )
+            if cursor.rowcount > 0:
+                self.logger.info(
+                    f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
+                )
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping zero-date timestamp fix: {e}")
+
         self.logger.info("Database schema initialized")
 
     def save_balance_snapshot(self, balance_usdt: float) -> None:

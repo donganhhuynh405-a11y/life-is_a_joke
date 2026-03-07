@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -41,6 +42,8 @@ from .models import (
     StrategyListResponse,
     StrategyUpdateRequest,
     TickerResponse,
+    TrainingStartRequest,
+    TrainingStatusResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -388,6 +391,130 @@ async def get_prediction(symbol: str) -> PredictionResponse:
         confidence=0.5,
         model="ensemble",
     )
+
+
+# ---------------------------------------------------------------------------
+# ML Training progress
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/ml/training/status",
+    response_model=TrainingStatusResponse,
+    tags=["ML Training"],
+    summary="Get real-time ML training progress",
+)
+async def get_training_status() -> TrainingStatusResponse:
+    """
+    Return the live status of the ML training pipeline.
+
+    The status is read from the JSON progress file written by
+    TrainingProgressTracker.  If training has never run the status is 'idle'.
+    """
+    from pathlib import Path
+    from mi.training_progress import read_progress, DEFAULT_PROGRESS_FILE  # noqa: PLC0415
+
+    data = read_progress(DEFAULT_PROGRESS_FILE)
+
+    if data is None:
+        return TrainingStatusResponse(status="idle")
+
+    # Convert per-symbol results dict to the Pydantic sub-model
+    from .models import TrainingSymbolResult  # noqa: PLC0415
+    results = {
+        sym: TrainingSymbolResult(**res)
+        for sym, res in data.get("results", {}).items()
+    }
+
+    return TrainingStatusResponse(
+        status=data.get("status", "idle"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        symbols_total=data.get("symbols_total", 0),
+        symbols_done=data.get("symbols_done", 0),
+        symbols_successful=data.get("symbols_successful", 0),
+        symbols_skipped=data.get("symbols_skipped", 0),
+        symbols_failed=data.get("symbols_failed", 0),
+        current_symbol=data.get("current_symbol"),
+        current_phase=data.get("current_phase"),
+        progress_pct=data.get("progress_pct", 0.0),
+        eta_seconds=data.get("eta_seconds"),
+        results=results,
+        log=data.get("log", [])[-50:],   # return last 50 log lines
+    )
+
+
+@router.post(
+    "/ml/training/start",
+    response_model=TrainingStatusResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["ML Training"],
+    summary="Trigger ML training in the background",
+)
+async def start_training(request: TrainingStartRequest) -> TrainingStatusResponse:
+    """
+    Trigger the ML historical pre-training pipeline in a background thread.
+
+    If training is already running, returns the current status with HTTP 202
+    without starting a second run.
+
+    Request body (all optional):
+    - **force_retrain** – re-train even if a model already exists (default: false)
+    - **symbols** – override the list of symbols (default: uses bot config)
+    """
+    from pathlib import Path  # noqa: PLC0415
+    from mi.training_progress import read_progress, DEFAULT_PROGRESS_FILE  # noqa: PLC0415
+
+    # Guard: don't start a second run while one is in progress
+    current = read_progress(DEFAULT_PROGRESS_FILE)
+    if current and current.get("status") == "running":
+        logger.info("Training already in progress – ignoring duplicate start request")
+        return await get_training_status()
+
+    def _run_training():
+        import asyncio  # noqa: PLC0415
+
+        try:
+            # Resolve symbols and exchange from environment / config
+            symbols = request.symbols
+            if not symbols:
+                symbols_env = os.getenv("TRAINING_SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT")
+                symbols = [s.strip() for s in symbols_env.split(",") if s.strip()]
+
+            logger.info(
+                "🚀 Background training triggered via API for %d symbols (force=%s)",
+                len(symbols), request.force_retrain
+            )
+
+            # Import pipeline inside thread to avoid circular imports at module level
+            from mi.training_pipeline import MLTrainingPipeline  # noqa: PLC0415
+            from core.exchange_adapter import ExchangeAdapter  # noqa: PLC0415
+
+            exchange = ExchangeAdapter()
+
+            pipeline = MLTrainingPipeline(
+                exchange=exchange,
+                symbols=symbols,
+                timeframe="1h",
+                force_retrain=request.force_retrain,
+                progress_file=DEFAULT_PROGRESS_FILE,
+            )
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(pipeline.train_all_symbols())
+            finally:
+                loop.close()
+
+        except Exception as exc:
+            logger.error("Background training failed: %s", exc, exc_info=True)
+
+    thread = threading.Thread(target=_run_training, daemon=True, name="ml-training")
+    thread.start()
+
+    # Return the (now-running) status
+    return await get_training_status()
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ numpy>=1.24.0
 
 # Database
 SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.0
 
 # Web framework (optional)
 fastapi>=0.104.0
@@ -35,7 +36,10 @@ pydantic>=2.5.0
 psutil>=5.9.0
 
 # Machine Learning - Ultimate Trading AI
-tensorflow>=2.15.0
+# Use tensorflow-cpu instead of tensorflow to avoid cuda-bindings and cuda-pathfinder
+# that the standard tensorflow wheel installs on Linux even on CPU-only VPS servers.
+# tensorflow-cpu provides the same Python API and is available for versions 2.15.x-2.16.x.
+tensorflow-cpu>=2.15.0
 scikit-learn>=1.3.0
 joblib>=1.3.0
 torch>=2.6.0
