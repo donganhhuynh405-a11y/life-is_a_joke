@@ -16,9 +16,11 @@ services:
   bot:
     build: .
     depends_on: [redis, postgres]
+    volumes:
+      - bot_data:/var/lib/trading-bot
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://trader:${DB_PASSWORD}@postgres/trading
+      - DATABASE_URL=postgresql://trader:${DB_PASSWORD}@postgres:5432/trading
     env_file: .env
     restart: unless-stopped
   
@@ -38,3 +40,4 @@ volumes:
   redis_data:
   postgres_data:
   grafana_data:
+  bot_data:

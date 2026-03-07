@@ -4,20 +4,29 @@ Handles all database operations for trading history, positions, and analytics
 """
 
 import logging
+import os
 import sqlite3
 from typing import List, Dict, Optional
 from pathlib import Path
 
+from sqlalchemy import create_engine
+
 
 class Database:
-    """Database manager for SQLite"""
+    """Database manager for SQLite and PostgreSQL"""
 
     def __init__(self, config):
         """Initialize database connection"""
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        if config.db_type == 'sqlite':
+        # Try PostgreSQL first if DATABASE_URL exists
+        db_url = os.getenv('DATABASE_URL')
+        if db_url and 'postgresql' in db_url:
+            self.engine = create_engine(db_url)
+            self.conn = self.engine.raw_connection()
+            self.logger.info("Connected to PostgreSQL")
+        elif config.db_type == 'sqlite':
             # Ensure directory exists
             db_path = Path(config.db_path)
             db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +46,7 @@ class Database:
 
             self.logger.info(f"Connected to SQLite database: {config.db_path}")
         else:
-            raise NotImplementedError(f"Database type {config.db_type} not implemented")
+            raise ValueError("Database type not configured")
 
         # Initialize schema
         self._init_schema()
@@ -49,7 +58,7 @@ class Database:
         # Trades table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 order_id TEXT UNIQUE,
@@ -59,7 +68,7 @@ class Database:
                 commission_asset TEXT,
                 profit_loss REAL,
                 strategy TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'completed'
             )
         ''')
@@ -67,7 +76,7 @@ class Database:
         # Positions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 entry_price REAL NOT NULL,
@@ -77,8 +86,8 @@ class Database:
                 current_price REAL,
                 profit_loss REAL,
                 status TEXT DEFAULT 'open',
-                opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                closed_at DATETIME,
+                opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                closed_at TIMESTAMP,
                 exit_price REAL,
                 strategy TEXT
             )
@@ -87,14 +96,14 @@ class Database:
         try:
             cursor.execute("ALTER TABLE positions ADD COLUMN exit_price REAL")
             self.logger.info("Added exit_price column to positions table")
-        except sqlite3.OperationalError:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Skipping exit_price column addition: {e}")
 
         try:
             cursor.execute("ALTER TABLE positions ADD COLUMN pnl REAL")
             self.logger.info("Added pnl column to positions table")
-        except sqlite3.OperationalError:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Skipping pnl column addition: {e}")
 
         # Fix invalid zero-date timestamps written by older bot versions
         try:
@@ -105,8 +114,8 @@ class Database:
                 self.logger.info(
                     f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
                 )
-        except sqlite3.OperationalError:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Skipping zero-date timestamp fix: {e}")
 
         # Daily stats table
         cursor.execute('''
@@ -122,9 +131,9 @@ class Database:
         # Balance snapshots table - records USDT balance at a point in time
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS balance_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 balance_usdt REAL NOT NULL,
-                recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
