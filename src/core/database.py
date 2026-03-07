@@ -97,7 +97,8 @@ class Database:
             )
         ''')
 
-        # Positions table
+        # Positions table (exit_price and pnl are included inline so the
+        # ALTER TABLE migration stanzas below are no-ops on a fresh install)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS positions (
                 id SERIAL PRIMARY KEY,
@@ -113,33 +114,10 @@ class Database:
                 opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 closed_at TIMESTAMP,
                 exit_price REAL,
+                pnl REAL,
                 strategy TEXT
             )
         ''')
-
-        try:
-            cursor.execute("ALTER TABLE positions ADD COLUMN exit_price REAL")
-            self.logger.info("Added exit_price column to positions table")
-        except Exception as e:
-            self.logger.debug(f"Skipping exit_price column addition: {e}")
-
-        try:
-            cursor.execute("ALTER TABLE positions ADD COLUMN pnl REAL")
-            self.logger.info("Added pnl column to positions table")
-        except Exception as e:
-            self.logger.debug(f"Skipping pnl column addition: {e}")
-
-        # Fix invalid zero-date timestamps written by older bot versions
-        try:
-            cursor.execute(
-                "UPDATE positions SET closed_at = NULL WHERE closed_at = '0000-00-00 00:00:00'"
-            )
-            if cursor.rowcount > 0:
-                self.logger.info(
-                    f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
-                )
-        except Exception as e:
-            self.logger.debug(f"Skipping zero-date timestamp fix: {e}")
 
         # Daily stats table
         cursor.execute('''
@@ -161,7 +139,47 @@ class Database:
             )
         ''')
 
+        # Commit the table structure before running migrations.
+        # psycopg2 (PostgreSQL) puts the connection in ABORTED state after any
+        # failed query; committing here ensures the tables above are durable and
+        # that a rollback triggered by a migration failure does not undo them.
         self.conn.commit()
+
+        # --- Migrations: add optional columns to existing tables ---
+        # Each migration runs in its own mini-transaction so that a failure
+        # (e.g. column already exists) only rolls back that one statement, not
+        # the entire schema initialisation. The rollback call resets psycopg2's
+        # error state; sqlite3 in autocommit mode ignores it safely.
+        try:
+            cursor.execute("ALTER TABLE positions ADD COLUMN exit_price REAL")
+            self.logger.info("Added exit_price column to positions table")
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping exit_price column addition: {e}")
+
+        try:
+            cursor.execute("ALTER TABLE positions ADD COLUMN pnl REAL")
+            self.logger.info("Added pnl column to positions table")
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping pnl column addition: {e}")
+
+        # Fix invalid zero-date timestamps written by older bot versions
+        try:
+            cursor.execute(
+                "UPDATE positions SET closed_at = NULL WHERE closed_at = '0000-00-00 00:00:00'"
+            )
+            if cursor.rowcount > 0:
+                self.logger.info(
+                    f"Fixed {cursor.rowcount} position(s) with invalid closed_at timestamp"
+                )
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            self.logger.debug(f"Skipping zero-date timestamp fix: {e}")
+
         self.logger.info("Database schema initialized")
 
     def save_balance_snapshot(self, balance_usdt: float) -> None:

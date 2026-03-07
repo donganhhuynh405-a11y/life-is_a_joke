@@ -41,9 +41,26 @@ COPY . .
 ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONPATH=/root/.local/lib/python3.11/site-packages:/app:$PYTHONPATH
 
-# Create non-root user
-RUN useradd -m -u 1000 trader && chown -R trader:trader /app
-USER trader
+# Install su-exec (tiny setuid helper used by the entrypoint to drop
+# from root to trader without a full shell session).  We also pre-create
+# the data directory so that the Docker volume is initialised with trader
+# ownership when the volume is first created (Docker copies the container's
+# directory — including its owner — into a newly created named volume).
+RUN apt-get update && apt-get install -y --no-install-recommends su-exec \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user and set up owned directories
+RUN useradd -m -u 1000 trader \
+    && chown -R trader:trader /app \
+    && mkdir -p /var/lib/trading-bot \
+    && chown -R trader:trader /var/lib/trading-bot
+
+# Entrypoint runs as root, fixes volume ownership if needed, then execs the
+# bot as the trader user.  This handles both fresh volumes (which inherit the
+# container's directory ownership set above) and pre-existing volumes that
+# were created by an earlier container running as root.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Health check: verify the bot's Prometheus metrics server is responding.
 # start-period gives the bot time to connect to the exchange and PostgreSQL
@@ -51,4 +68,5 @@ USER trader
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD python -c "import socket; socket.create_connection(('localhost', 8001), timeout=2)" || exit 1
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python", "-m", "src.main"]
