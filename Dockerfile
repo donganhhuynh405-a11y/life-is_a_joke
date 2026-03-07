@@ -48,7 +48,8 @@ ENV PYTHONPATH=/root/.local/lib/python3.11/site-packages:/app:$PYTHONPATH
 # with trader ownership when the volume is first created (Docker copies the
 # container's directory — including its owner — into a newly created named
 # volume).
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
     && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
 
