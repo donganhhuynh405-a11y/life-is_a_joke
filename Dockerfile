@@ -14,29 +14,32 @@ COPY requirements.txt .
 #   cuda-pathfinder even on CPU-only hosts. tensorflow-cpu is the CPU-only variant
 #   (available for versions 2.15.x – 2.16.x) and provides the same Python API.
 #
-# NOTE: Do NOT use "pip install --user" here. User-local packages are installed into
-#   /root/.local which is inaccessible to the non-root "trader" user in the runtime
-#   stage, causing every Python import to fail and the container to restart instantly.
-#   Install into the system site-packages (/usr/local/lib/python3.11/site-packages/)
-#   so that any user can import them.
-RUN pip install --no-cache-dir \
+# Use "pip install --user" so packages land in /root/.local (not the system
+# site-packages).  The runtime stage then copies that single directory and
+# exports it via PYTHONPATH/PATH, which keeps the runtime layer small and
+# avoids "no space left on device" errors that occur when copying the entire
+# system site-packages tree (several GB including tensorflow native libs).
+RUN pip install --user --no-cache-dir \
         "torch>=2.6.0" \
         --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip install --no-cache-dir "tensorflow-cpu>=2.15.0"
+RUN pip install --user --no-cache-dir "tensorflow-cpu>=2.15.0"
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --user --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim as runtime
 
 WORKDIR /app
-# Copy the packages installed into the system site-packages in the builder stage.
-# This makes them available to all users (including the non-root "trader" user below).
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /root/.local /root/.local
 COPY . .
 
-ENV PYTHONPATH=/app:$PYTHONPATH
+# Make /root/.local packages and scripts accessible to every user, including
+# the non-root "trader" user created below.  Without PYTHONPATH, Python's
+# site module resolves user-site-packages relative to the current user's HOME
+# (~/.local/…), so "trader" would look in /home/trader/.local — not /root/.local
+# — and every import would fail, causing an instant restart loop.
+ENV PATH=/root/.local/bin:$PATH
+ENV PYTHONPATH=/root/.local/lib/python3.11/site-packages:/app:$PYTHONPATH
 
 # Create non-root user
 RUN useradd -m -u 1000 trader && chown -R trader:trader /app
