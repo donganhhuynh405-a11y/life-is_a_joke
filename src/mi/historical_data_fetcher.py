@@ -179,7 +179,7 @@ class HistoricalDataFetcher:
                     symbol=symbol,
                     interval=timeframe,
                     limit=limit,
-                    start_time=int(current_start.timestamp() * 1000)
+                    startTime=int(current_start.timestamp() * 1000)
                 )
 
                 if not candles or len(candles) == 0:
@@ -326,7 +326,7 @@ class HistoricalDataFetcher:
                 symbol=symbol,
                 interval=timeframe,
                 limit=1000,
-                start_time=int(last_timestamp.timestamp() * 1000)
+                startTime=int(last_timestamp.timestamp() * 1000)
             )
 
             if candles and len(candles) > 0:
