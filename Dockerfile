@@ -3,15 +3,21 @@ FROM python:3.11-slim as builder
 WORKDIR /app
 COPY requirements.txt .
 
-# Install CPU-only PyTorch BEFORE requirements.txt.
-# The default PyPI wheel for torch on Linux bundles CUDA libraries (nvidia-cublas-cu12,
-# nvidia-cudnn-cu12, nvidia-nccl-cu12, etc.) that add ~2 GB to the build layer and
-# cause "No space left on device" on servers without a GPU.
-# Installing from the PyTorch CPU wheel index first satisfies the torch>=2.6.0
-# constraint in requirements.txt so pip will not re-download the CUDA variant.
+# Pre-install CPU-only versions of heavy ML packages to avoid CUDA libraries
+# that cause "No space left on device" on CPU-only VPS servers.
+#
+# torch: the default PyPI wheel on Linux bundles nvidia-cublas-cu12, nvidia-cudnn-cu12,
+#   nvidia-nccl-cu12, triton, etc. (~2.3 GB). The CPU wheel from PyTorch's own index
+#   is ~200 MB and satisfies the torch>=2.6.0 constraint in requirements.txt.
+#
+# tensorflow-cpu: the standard tensorflow wheel on Linux installs cuda-bindings and
+#   cuda-pathfinder even on CPU-only hosts. tensorflow-cpu is the CPU-only variant
+#   (available for versions 2.15.x – 2.16.x) and provides the same Python API.
 RUN pip install --user --no-cache-dir \
         "torch>=2.6.0" \
         --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --user --no-cache-dir "tensorflow-cpu>=2.15.0"
 
 RUN pip install --user --no-cache-dir -r requirements.txt
 

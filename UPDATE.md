@@ -11,30 +11,39 @@
 Error response from daemon: No such container: trading-bot
 ```
 
-### 2. CPU-only PyTorch в `Dockerfile`
+### 2. CPU-only PyTorch и TensorFlow CPU в `Dockerfile` / `requirements.txt`
 
 `pip install torch` на Linux по умолчанию скачивает wheel с CUDA-библиотеками
-(nvidia-cublas-cu12, nvidia-cudnn-cu12, nvidia-nccl-cu12 и др.) — это **~2.5 ГБ дополнительно**.
-На сервере без видеокарты эти библиотеки не нужны, и Docker build завершался ошибкой:
+(nvidia-cublas-cu12, nvidia-cudnn-cu12, nvidia-nccl-cu12, triton и др.) — это **~2.5 ГБ дополнительно**.
+
+`pip install tensorflow` на Linux начиная с версии 2.15 устанавливает `cuda-bindings` и
+`cuda-pathfinder` — это ещё **~150–300 МБ** даже на CPU-сервере.
+
+На сервере без видеокарты все эти библиотеки не нужны, и Docker build завершался ошибкой:
 
 ```
 ERROR: Could not install packages due to an OSError: [Errno 28] No space left on device
 ```
 
-Теперь `Dockerfile` устанавливает torch из CPU-only wheel-индекса PyTorch **до** основного
-`pip install -r requirements.txt`. Поскольку ограничение `torch>=2.6.0` уже выполнено,
-pip не перекачивает CUDA-вариант.
+**Исправления:**
+
+- `requirements.txt`: заменено `tensorflow>=2.15.0` → `tensorflow-cpu>=2.15.0`  
+  (CPU-only вариант TensorFlow, не устанавливает CUDA-зависимости)
+- `Dockerfile`: torch устанавливается из CPU-only wheel-индекса PyTorch **перед** основным
+  `pip install -r requirements.txt`. Поскольку ограничение `torch>=2.6.0` уже выполнено,
+  pip не перекачивает CUDA-вариант. Аналогично для `tensorflow-cpu`.
 
 ---
 
 ## Требования к дисковому пространству
 
-| Вариант torch | Размер (installed) |
-|---|---|
-| PyPI (CUDA, по умолчанию) | ~2.5 ГБ |
-| CPU-only (после исправления) | ~200 МБ |
+| Компонент | До исправления (CUDA) | После исправления (CPU) |
+|---|---|---|
+| torch | ~2.5 ГБ | ~200 МБ |
+| tensorflow | ~400 МБ + CUDA-stubs | ~200 МБ |
+| **Итого экономия** | | **~2.5 ГБ** |
 
-Минимум свободного места для сборки образа: **3 ГБ** (CPU-only torch).
+Минимум свободного места для сборки образа: **3 ГБ**.
 
 Проверить место на диске:
 ```bash
