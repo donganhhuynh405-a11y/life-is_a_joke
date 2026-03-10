@@ -105,8 +105,34 @@ class HistoricalDataFetcher:
         return datetime.strptime(date_str, '%Y-%m-%d')
 
     def _get_cache_path(self, symbol: str, timeframe: str) -> Path:
-        """Путь к кэшированному файлу"""
-        return self.cache_dir / f"{symbol}_{timeframe}.parquet"
+        """Путь к кэшированному файлу (parquet, или csv как запасной вариант)"""
+        parquet_path = self.cache_dir / f"{symbol}_{timeframe}.parquet"
+        csv_path = self.cache_dir / f"{symbol}_{timeframe}.csv"
+        # Prefer existing CSV over missing parquet (legacy fallback)
+        if not parquet_path.exists() and csv_path.exists():
+            return csv_path
+        return parquet_path
+
+    def _save_cache(self, df: pd.DataFrame, cache_path: Path) -> None:
+        """Сохранить DataFrame в кэш; пробует parquet, при неудаче — csv"""
+        if str(cache_path).endswith('.csv'):
+            df.to_csv(cache_path, index=True)
+            return
+        try:
+            df.to_parquet(cache_path)
+        except Exception as parquet_err:
+            csv_path = cache_path.with_suffix('.csv')
+            logger.warning(
+                f"Parquet save failed ({parquet_err}), falling back to CSV: {csv_path}")
+            df.to_csv(csv_path, index=True)
+
+    def _load_cache(self, cache_path: Path) -> pd.DataFrame:
+        """Загрузить DataFrame из кэша (parquet или csv)"""
+        if str(cache_path).endswith('.csv'):
+            df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
+            df.index = pd.to_datetime(df.index)
+            return df
+        return pd.read_parquet(cache_path)
 
     def _get_metadata_path(self, symbol: str, timeframe: str) -> Path:
         """Путь к метаданным кэша"""
@@ -144,7 +170,7 @@ class HistoricalDataFetcher:
                     # Если кэш свежий (< 24 часов), использовать его
                     if datetime.now() - last_update < timedelta(hours=24):
                         logger.info(f"📂 Loading {symbol} {timeframe} from cache")
-                        df = pd.read_parquet(cache_path)
+                        df = self._load_cache(cache_path)
                         logger.info(
                             f"✅ Loaded {len(df)} candles from cache (from {df.index[0]} to {df.index[-1]})")
                         return df
@@ -219,7 +245,7 @@ class HistoricalDataFetcher:
 
         # Сохранить в кэш
         try:
-            df.to_parquet(cache_path)
+            self._save_cache(df, cache_path)
 
             # Сохранить метаданные
             metadata = {
@@ -315,7 +341,7 @@ class HistoricalDataFetcher:
 
         # Загрузить существующий кэш
         try:
-            df = pd.read_parquet(cache_path)
+            df = self._load_cache(cache_path)
             last_timestamp = df.index[-1]
 
             # Загрузить новые данные
@@ -337,7 +363,7 @@ class HistoricalDataFetcher:
                 df.sort_index(inplace=True)
 
                 # Сохранить
-                df.to_parquet(cache_path)
+                self._save_cache(df, cache_path)
 
                 logger.info(f"✅ Updated {symbol}: added {len(new_df)} new candles, total {len(df)}")
 
