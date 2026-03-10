@@ -489,8 +489,9 @@ async def start_training(request: TrainingStartRequest) -> TrainingStatusRespons
             # Import pipeline inside thread to avoid circular imports at module level
             from mi.training_pipeline import MLTrainingPipeline  # noqa: PLC0415
             from core.exchange_adapter import ExchangeAdapter  # noqa: PLC0415
+            from core.config import Config  # noqa: PLC0415
 
-            exchange = ExchangeAdapter()
+            exchange = ExchangeAdapter(Config())
 
             pipeline = MLTrainingPipeline(
                 exchange=exchange,

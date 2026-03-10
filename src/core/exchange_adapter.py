@@ -223,8 +223,22 @@ class ExchangeAdapter:
             self.logger.error(f"Failed to get ticker for {symbol}: {str(e)}")
             raise
 
-    def get_klines(self, symbol: str, interval: str = '1h', limit: int = 100):
-        """Get candlestick data"""
+    def get_klines(
+            self,
+            symbol: str,
+            interval: str = '1h',
+            limit: int = 100,
+            startTime: Optional[int] = None,
+            endTime: Optional[int] = None):
+        """Get candlestick data
+
+        Args:
+            symbol: Trading pair symbol
+            interval: Candle interval (e.g. '1h', '4h', '1d')
+            limit: Maximum number of candles to return
+            startTime: Start time in milliseconds (inclusive)
+            endTime: End time in milliseconds (inclusive)
+        """
         try:
             if self.use_ccxt:
                 symbol = self.normalize_symbol(symbol)
@@ -236,7 +250,9 @@ class ExchangeAdapter:
                 }
                 timeframe = timeframe_map.get(interval, '1h')
 
-                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                # CCXT uses 'since' (ms) for the start timestamp
+                ohlcv = self.exchange.fetch_ohlcv(
+                    symbol, timeframe, since=startTime, limit=limit)
 
                 # Convert to Binance format
                 # CCXT returns: [timestamp, open, high, low, close, volume]
@@ -259,7 +275,12 @@ class ExchangeAdapter:
                     for candle in ohlcv
                 ]
             else:
-                return self.exchange.get_klines(symbol=symbol, interval=interval, limit=limit)
+                kwargs = {'symbol': symbol, 'interval': interval, 'limit': limit}
+                if startTime is not None:
+                    kwargs['startTime'] = startTime
+                if endTime is not None:
+                    kwargs['endTime'] = endTime
+                return self.exchange.get_klines(**kwargs)
         except Exception as e:
             self.logger.error(f"Failed to get klines for {symbol}: {str(e)}")
             raise

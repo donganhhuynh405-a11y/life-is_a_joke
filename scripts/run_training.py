@@ -39,8 +39,28 @@ if str(_SRC) not in sys.path:
 # ── Default values ────────────────────────────────────────────────────────────
 
 DEFAULT_SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
-    "ADAUSDT", "DOGEUSDT", "DOTUSDT", "AVAXUSDT", "MATICUSDT",
+    # ── Top-10 by market cap ──────────────────────────────────────────
+    "BTCUSDT",   # Bitcoin
+    "ETHUSDT",   # Ethereum
+    "BNBUSDT",   # BNB
+    "SOLUSDT",   # Solana
+    "XRPUSDT",   # XRP
+    "ADAUSDT",   # Cardano
+    "DOGEUSDT",  # Dogecoin
+    "AVAXUSDT",  # Avalanche
+    "DOTUSDT",   # Polkadot
+    "MATICUSDT", # Polygon (POL)
+    # ── Top 11-20 by market cap ───────────────────────────────────────
+    "TRXUSDT",   # TRON
+    "LINKUSDT",  # Chainlink
+    "LTCUSDT",   # Litecoin
+    "UNIUSDT",   # Uniswap
+    "ATOMUSDT",  # Cosmos
+    "NEARUSDT",  # NEAR Protocol
+    "XLMUSDT",   # Stellar
+    "SHIBUSDT",  # Shiba Inu
+    "ARBUSDT",   # Arbitrum
+    "OPUSDT",    # Optimism
 ]
 
 DEFAULT_MODELS_DIR = os.getenv("MODELS_DIR", "/var/lib/trading-bot/models")
@@ -81,11 +101,12 @@ async def run(args: argparse.Namespace) -> int:
     logger.info("=" * 70)
 
     try:
+        from core.config import Config
         from core.exchange_adapter import ExchangeAdapter
         from mi.training_pipeline import MLTrainingPipeline
         from mi.training_progress import DEFAULT_PROGRESS_FILE
 
-        exchange = ExchangeAdapter()
+        exchange = ExchangeAdapter(Config())
 
         pipeline = MLTrainingPipeline(
             exchange=exchange,

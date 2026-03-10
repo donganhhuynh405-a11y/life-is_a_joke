@@ -86,7 +86,6 @@ class HistoricalDataFetcher:
             # ── Payments / utility ───────────────────────────────────────────
             'XRPUSDT':   '2018-05-04',
             'LINKUSDT':  '2017-11-22',
-            'LTCUSDT':   '2017-12-13',
         }
 
         # Стандартная дата для неизвестных символов (начало Binance)
