@@ -29,10 +29,8 @@ services:
     build: .
     container_name: trading-bot
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+      - redis
     volumes:
       - bot_data:/var/lib/trading-bot
     environment:
