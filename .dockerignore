@@ -95,6 +95,7 @@ Dockerfile*
 scripts/
 !scripts/run_training.py
 !scripts/watch_training.py
+!scripts/verify_learning.py
 
 # Frontend (built separately)
 frontend/node_modules/
