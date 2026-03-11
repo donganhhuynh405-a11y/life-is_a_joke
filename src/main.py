@@ -10,7 +10,6 @@ import time
 import signal
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add src directory and parent directory to Python path
 src_dir = Path(__file__).parent
@@ -47,15 +46,20 @@ def signal_handler(signum, frame):
 def main():
     """Main application entry point"""
     # Load environment variables
-    env_file = os.environ.get('CONFIG_DIR', '/etc/trading-bot') + '/.env'
-    if not os.path.exists(env_file):
-        env_file = '.env'
+    try:
+        from dotenv import load_dotenv
+        env_file = os.environ.get('CONFIG_DIR', '/etc/trading-bot') + '/.env'
+        if not os.path.exists(env_file):
+            env_file = '.env'
 
-    if os.path.exists(env_file):
-        load_dotenv(env_file)
-        print(f"Loaded environment from: {env_file}")
-    else:
-        print(f"Warning: No .env file found at {env_file}")
+        if os.path.exists(env_file):
+            load_dotenv(env_file)
+            print(f"Loaded environment from: {env_file}")
+        else:
+            print(f"Warning: No .env file found at {env_file}")
+    except ImportError:
+        print("Warning: python-dotenv not installed — skipping .env loading. "
+              "Set environment variables via the system (e.g. systemd EnvironmentFile=).")
 
     # Setup logging
     logger = setup_logger()
