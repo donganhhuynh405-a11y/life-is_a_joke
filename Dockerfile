@@ -1,4 +1,7 @@
-FROM python:3.11-slim
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+# Installs all Python dependencies. Used by docker-compose.dev.yml as a base
+# for development (with hot-reload source mounts).
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 COPY requirements.txt .
@@ -30,3 +33,16 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python","-m","src.main"]
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+# Lean production image built on top of builder.  docker-compose.prod.yml uses
+# this target to get a smaller, security-hardened container.
+FROM builder AS runtime
+
+# Drop any leftover build artefacts and test files to reduce image size
+RUN find /app -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /app -name '*.pyc' -delete && \
+    rm -rf /app/tests /app/notebooks /app/tools
+
+# Switch to the unprivileged user for all subsequent commands
+USER trader

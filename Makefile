@@ -76,25 +76,25 @@ docker-build: ## Build Docker image
 	docker build -t trading-bot:latest .
 
 docker-up: ## Start all services with Docker Compose
-	docker-compose up -d
+	docker compose up -d
 
 docker-up-dev: ## Start development environment
-	docker-compose -f docker-compose.dev.yml up -d
+	docker compose -f docker-compose.dev.yml up -d
 
 docker-up-prod: ## Start production environment
-	docker-compose -f docker-compose.prod.yml up -d
+	docker compose -f docker-compose.prod.yml up -d
 
 docker-down: ## Stop all Docker services
-	docker-compose down
+	docker compose down
 
 docker-logs: ## View Docker logs
-	docker-compose logs -f bot
+	docker compose logs -f bot
 
 docker-shell: ## Open shell in bot container
-	docker-compose exec bot bash
+	docker compose exec bot bash
 
 docker-restart: ## Restart bot service
-	docker-compose restart bot
+	docker compose restart bot
 
 # Development
 run: ## Run bot in development mode
