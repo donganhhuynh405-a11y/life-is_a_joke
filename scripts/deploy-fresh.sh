@@ -99,6 +99,20 @@ chmod +x scripts/*.sh 2>/dev/null || true
 chmod +x scripts/*.py 2>/dev/null || true
 echo ""
 
+# Install the systemd service file.  This ensures ExecStartPre=+venv_prestart.sh
+# is always in place so that on every subsequent start the venv ownership and
+# packages are fixed automatically — even after a manual git pull.
+SERVICE_SRC="/opt/trading-bot/deployment/systemd/trading-bot.service"
+SERVICE_DST="/etc/systemd/system/trading-bot.service"
+if [ -f "$SERVICE_SRC" ]; then
+    print_info "   Installing systemd service file..."
+    cp "$SERVICE_SRC" "$SERVICE_DST"
+    systemctl daemon-reload
+    systemctl enable trading-bot 2>/dev/null || true
+    print_info "   ✅ systemd service file installed and enabled"
+fi
+echo ""
+
 # Step 8: Start bot
 print_info "Step 8/8: Starting bot..."
 systemctl start trading-bot

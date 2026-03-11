@@ -100,6 +100,24 @@ git pull origin "$BRANCH"
 print_info "   ✅ Code updated to: $(git log --oneline -1)"
 echo ""
 
+# Install/refresh the systemd service file so that ExecStartPre=+venv_prestart.sh
+# is always active.  Without this step a server that was set up with an older
+# version of the service file will be missing the pre-start hook and the venv
+# will remain root-owned, causing "No module named …" import errors.
+SERVICE_SRC="deployment/systemd/trading-bot.service"
+SERVICE_DST="/etc/systemd/system/trading-bot.service"
+if [ -f "$SERVICE_SRC" ]; then
+    if ! diff -q "$SERVICE_SRC" "$SERVICE_DST" > /dev/null 2>&1; then
+        print_info "   Updating systemd service file ($SERVICE_DST)..."
+        cp "$SERVICE_SRC" "$SERVICE_DST"
+        systemctl daemon-reload
+        print_info "   ✅ systemd service file updated and daemon reloaded"
+    else
+        print_info "   ✅ systemd service file already up to date"
+    fi
+fi
+echo ""
+
 # Step 6: Update dependencies
 print_info "Step 6/7: Updating dependencies..."
 if [ ! -d "venv" ]; then

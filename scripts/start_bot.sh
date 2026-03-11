@@ -76,10 +76,30 @@ else
         if venv_is_writable; then
             install_requirements
         else
-            echo "[start_bot] WARNING: venv is not writable by $(id -un). Skipping pip." >&2
-            echo "[start_bot]   To fix, run as root:" >&2
-            echo "[start_bot]     chown -R tradingbot:tradingbot /opt/trading-bot/venv" >&2
-            echo "[start_bot]     /opt/trading-bot/venv/bin/pip install -r /opt/trading-bot/requirements.txt" >&2
+            # Venv is owned by root.  Attempt pip install anyway in case only the
+            # directory metadata is unwritable but site-packages are accessible.
+            # If pip itself fails, exit with a clear, actionable error so the admin
+            # knows exactly what to fix — rather than proceeding to a confusing
+            # "No module named …" ImportError inside main.py.
+            echo "[start_bot] WARNING: venv is not writable by $(id -un)." >&2
+            echo "[start_bot]   requirements.txt has changed — attempting pip install..." >&2
+            if "$VENV_PIP" install -r "$REQUIREMENTS" --quiet; then
+                sha256sum "$REQUIREMENTS" > "$STAMP_FILE" 2>/dev/null || true
+                echo "[start_bot] Requirements installed." >&2
+            else
+                echo "[start_bot] ERROR: pip install failed — venv is owned by root." >&2
+                echo "[start_bot]   Fix ownership and reinstall packages (run as root):" >&2
+                echo "[start_bot]     chown -R tradingbot:tradingbot /opt/trading-bot/venv" >&2
+                echo "[start_bot]     /opt/trading-bot/venv/bin/pip install -r /opt/trading-bot/requirements.txt" >&2
+                echo "[start_bot]   Alternatively, update the systemd service file so that" >&2
+                echo "[start_bot]   venv_prestart.sh handles this automatically on every start:" >&2
+                echo "[start_bot]     cp /opt/trading-bot/deployment/systemd/trading-bot.service \\" >&2
+                echo "[start_bot]        /etc/systemd/system/trading-bot.service" >&2
+                echo "[start_bot]     systemctl daemon-reload" >&2
+                echo "[start_bot] Sleeping 30s before exit so restart policy can apply..." >&2
+                sleep 30
+                exit 1
+            fi
         fi
     fi
 fi
