@@ -4,39 +4,12 @@ Loads and validates configuration from environment variables
 """
 
 import os
+from utils.env import strip_comment, getenv as _env
 
 
 def _strip_comment(value: str) -> str:
-    """Strip an inline shell comment from an environment-variable value.
-
-    ``systemd``'s ``EnvironmentFile=`` directive does **not** remove inline
-    ``# …`` comments from unquoted values.  If the ``.env`` file was copied
-    verbatim from ``.env.template`` it may contain lines such as::
-
-        MAX_POSITION_SIZE=0.1   # Max fraction of balance per position
-
-    The process then receives the literal string
-    ``'0.1   # Max fraction of balance per position'``, which breaks
-    ``float()`` / ``int()`` conversion with a ``ValueError``.
-
-    This helper removes everything from the first ``#`` character onward
-    and strips surrounding whitespace.  It is safe to call on **numeric**
-    and **boolean** values because those never legitimately contain ``#``.
-    Do **not** use it for free-form string fields (API keys, passwords,
-    paths) where ``#`` could be a valid character.
-    """
-    if value is None or '#' not in value:
-        return (value or '').strip()
-    return value[:value.index('#')].strip()
-
-
-def _env(key: str, default: str = '') -> str:
-    """Return ``os.getenv(key, default)`` with inline shell comments stripped.
-
-    Convenience wrapper around :func:`_strip_comment` for use in numeric
-    and boolean config fields.
-    """
-    return _strip_comment(os.getenv(key, default))
+    """Alias for backward compatibility; delegates to utils.env.strip_comment."""
+    return strip_comment(value)
 
 
 class Config:
@@ -46,13 +19,13 @@ class Config:
         """Initialize configuration from environment variables"""
         # Application settings
         self.app_name = os.getenv('APP_NAME', 'trading-bot')
-        self.app_env = os.getenv('APP_ENV', 'production')
+        self.app_env = _env('APP_ENV', 'production')
         self.debug = _env('DEBUG', 'false').lower() == 'true'
-        self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+        self.log_level = _env('LOG_LEVEL', 'INFO')
 
         # Exchange configuration (supports multiple exchanges via CCXT)
         self.use_ccxt = _env('USE_CCXT', 'false').lower() == 'true'
-        self.exchange_id = os.getenv('EXCHANGE_ID', 'binance')  # binance, kraken, coinbase, etc.
+        self.exchange_id = _env('EXCHANGE_ID', 'binance')
         self.exchange_api_key = os.getenv('EXCHANGE_API_KEY', os.getenv('BINANCE_API_KEY', ''))
         self.exchange_api_secret = os.getenv(
             'EXCHANGE_API_SECRET', os.getenv(
@@ -66,7 +39,7 @@ class Config:
         self.binance_testnet = _env('BINANCE_TESTNET', 'false').lower() == 'true'
 
         # Database
-        self.db_type = os.getenv('DB_TYPE', 'sqlite')
+        self.db_type = _env('DB_TYPE', 'sqlite')
         self.db_path = os.getenv('DB_PATH', '/var/lib/trading-bot/trading_bot.db')
         self.db_host = os.getenv('DB_HOST', 'localhost')
         self.db_port = int(_env('DB_PORT', '5432'))
@@ -76,11 +49,11 @@ class Config:
 
         # Trading settings
         self.trading_enabled = _env('TRADING_ENABLED', 'true').lower() == 'true'
-        self.trading_mode = os.getenv('TRADING_MODE', 'live')
+        self.trading_mode = _env('TRADING_MODE', 'live')
 
         # Parse trading symbols from comma-separated string to list
-        symbols_str = os.getenv('TRADING_SYMBOLS', '')
-        default_symbol_str = os.getenv('DEFAULT_SYMBOL', 'BTCUSDT')
+        symbols_str = _env('TRADING_SYMBOLS', '')
+        default_symbol_str = _env('DEFAULT_SYMBOL', 'BTCUSDT')
 
         # Ensure default_symbol is a single symbol (take first if comma-separated)
         self.default_symbol = default_symbol_str.split(',')[0].strip(
@@ -90,7 +63,7 @@ class Config:
         self.trading_symbols = [s.strip() for s in symbols_str.split(
             ',') if s.strip()] if symbols_str else [self.default_symbol]
 
-        self.active_strategy = os.getenv('ACTIVE_STRATEGY', 'enhanced')  # 'simple' or 'enhanced'
+        self.active_strategy = _env('ACTIVE_STRATEGY', 'enhanced')
         self.max_position_size = float(_env('MAX_POSITION_SIZE', '0.1'))
         self.stop_loss_percentage = float(_env('STOP_LOSS_PERCENTAGE', '2.0'))
         self.take_profit_percentage = float(_env('TAKE_PROFIT_PERCENTAGE', '5.0'))
@@ -113,7 +86,7 @@ class Config:
 
         # Web interface
         self.web_enabled = _env('WEB_ENABLED', 'false').lower() == 'true'
-        self.web_host = os.getenv('WEB_HOST', '127.0.0.1')
+        self.web_host = _env('WEB_HOST', '127.0.0.1')
         self.web_port = int(_env('WEB_PORT', '8080'))
 
         # Monitoring
