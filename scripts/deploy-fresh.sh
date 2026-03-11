@@ -77,17 +77,26 @@ echo ""
 
 # Step 6: Install dependencies
 print_info "Step 6/8: Installing dependencies..."
-venv/bin/pip install --upgrade pip > /dev/null 2>&1
 venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 print_info "   ✅ Dependencies installed"
 echo ""
 
+# Record stamp so start_bot.sh does not re-try pip install on first startup
+sha256sum requirements.txt > venv/.requirements_installed 2>/dev/null || true
+
 # Step 7: Set permissions
+# IMPORTANT: the systemd service runs as 'tradingbot', so the entire app
+# directory (including the venv) must be owned by that user, not root.
 print_info "Step 7/8: Setting permissions..."
-chown -R root:root /opt/trading-bot
+if id "tradingbot" &>/dev/null; then
+    chown -R tradingbot:tradingbot /opt/trading-bot
+    print_info "   ✅ Permissions set (tradingbot:tradingbot)"
+else
+    print_warning "   User 'tradingbot' not found — skipping chown"
+    print_warning "   Create the user first: useradd --system --no-create-home --shell /bin/false tradingbot"
+fi
 chmod +x scripts/*.sh 2>/dev/null || true
 chmod +x scripts/*.py 2>/dev/null || true
-print_info "   ✅ Permissions set"
 echo ""
 
 # Step 8: Start bot

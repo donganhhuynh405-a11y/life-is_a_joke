@@ -106,10 +106,21 @@ if [ ! -d "venv" ]; then
     print_warning "   venv not found, creating..."
     python3 -m venv venv
 fi
-venv/bin/pip install --upgrade pip > /dev/null 2>&1
+# Do NOT run 'pip install --upgrade pip': it overwrites venv/bin/pip which
+# requires the venv to be writable by the current user (root here, but the
+# service runs as tradingbot).  Just install the requirements directly.
 venv/bin/pip install -r requirements.txt > /dev/null 2>&1
+# Record stamp so start_bot.sh does not re-try pip on first startup
+sha256sum requirements.txt > venv/.requirements_installed 2>/dev/null || true
 print_info "   ✅ Dependencies updated"
 echo ""
+
+# Ensure the service user owns everything so start_bot.sh can write the stamp
+# file and read packages without permission errors.
+if id "tradingbot" &>/dev/null; then
+    chown -R tradingbot:tradingbot /opt/trading-bot
+    print_info "   ✅ Ownership set to tradingbot:tradingbot"
+fi
 
 # Step 7: Start bot
 print_info "Step 7/7: Starting bot..."

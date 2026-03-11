@@ -179,8 +179,12 @@ if [ ! -x "$VENV_PYTHON" ]; then
     print_success "Virtual environment created"
 fi
 print_status "Updating Python dependencies..."
-"$BOT_DIR/venv/bin/pip" install --upgrade pip --quiet
+# Do NOT run 'pip install --upgrade pip': unnecessary at update time and it
+# overwrites the pip binary which can fail with permission errors when the venv
+# is owned by a different user.
 "$BOT_DIR/venv/bin/pip" install -r "$BOT_DIR/requirements.txt" --quiet
+# Record the stamp so start_bot.sh does not re-attempt pip install on startup.
+sha256sum "$BOT_DIR/requirements.txt" > "$BOT_DIR/venv/.requirements_installed" 2>/dev/null || true
 print_success "Python dependencies installed"
 
 # Step 7: Set correct ownership

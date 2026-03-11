@@ -23,12 +23,31 @@ STAMP_FILE="$VENV_DIR/.requirements_installed"
 install_requirements() {
     if [ -f "$REQUIREMENTS" ]; then
         echo "[start_bot] Installing/updating requirements..." >&2
-        "$VENV_PIP" install --upgrade pip --quiet
-        "$VENV_PIP" install -r "$REQUIREMENTS" --quiet
-        # Record the hash so we can skip reinstall on the next start
-        sha256sum "$REQUIREMENTS" > "$STAMP_FILE" 2>/dev/null || true
-        echo "[start_bot] Requirements installed." >&2
+        # Do NOT run 'pip install --upgrade pip' here: start_bot.sh runs as the
+        # service user (tradingbot) which may not own the venv binary, causing a
+        # permission denied error trying to overwrite venv/bin/pip.  The venv
+        # pip is already good enough to install packages.
+        if "$VENV_PIP" install -r "$REQUIREMENTS" --quiet; then
+            # Record the hash only on success so a failed install is retried on
+            # the next restart instead of being silently skipped.
+            sha256sum "$REQUIREMENTS" > "$STAMP_FILE" 2>/dev/null || true
+            echo "[start_bot] Requirements installed." >&2
+        else
+            echo "[start_bot] WARNING: pip install failed (see above). The bot will" >&2
+            echo "[start_bot]   try to start with whatever packages are already in the venv." >&2
+            echo "[start_bot]   To fix permanently, run as root:" >&2
+            echo "[start_bot]     /opt/trading-bot/venv/bin/pip install -r /opt/trading-bot/requirements.txt" >&2
+            echo "[start_bot]     chown -R tradingbot:tradingbot /opt/trading-bot/venv" >&2
+        fi
     fi
+}
+
+# Check whether the current user can write into the venv.  If the venv was
+# created by root and not yet chowned to the service user, pip will fail with
+# "Permission denied" and emit confusing error messages.  We detect this early
+# and skip the pip step, relying on packages that were already installed.
+venv_is_writable() {
+    [ -w "$VENV_DIR" ] && [ -w "$VENV_PIP" ]
 }
 
 # Rebuild the virtual environment if the python3 binary is missing.
@@ -54,7 +73,14 @@ else
     fi
     if [ "$CURRENT_HASH" != "$STAMP_HASH" ]; then
         echo "[start_bot] requirements.txt changed — reinstalling..." >&2
-        install_requirements
+        if venv_is_writable; then
+            install_requirements
+        else
+            echo "[start_bot] WARNING: venv is not writable by $(id -un). Skipping pip." >&2
+            echo "[start_bot]   To fix, run as root:" >&2
+            echo "[start_bot]     chown -R tradingbot:tradingbot /opt/trading-bot/venv" >&2
+            echo "[start_bot]     /opt/trading-bot/venv/bin/pip install -r /opt/trading-bot/requirements.txt" >&2
+        fi
     fi
 fi
 
