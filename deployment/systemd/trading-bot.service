@@ -15,6 +15,9 @@ Environment="PYTHONPATH=/opt/trading-bot/src:/opt/trading-bot"
 EnvironmentFile=-/opt/trading-bot/.env
 
 # Run as root (the "+" prefix overrides User=tradingbot for this step only).
+# First ensure the pre-start script is executable — a plain 'git pull' does not
+# set file modes on disk, so the execute bit can be missing after an update.
+ExecStartPre=+/bin/chmod +x /opt/trading-bot/scripts/venv_prestart.sh
 # This pre-start script creates the venv if absent, fixes its ownership so
 # the service user can read it, and installs / updates Python packages whenever
 # requirements.txt has changed — completely hands-free after any git pull.
