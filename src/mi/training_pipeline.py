@@ -82,6 +82,11 @@ class MLTrainingPipeline:
         logger.info("=" * 80)
 
         self.training_stats['started_at'] = datetime.now().isoformat()
+        self.training_stats['completed_at'] = None
+        self.training_stats['successful'] = 0
+        self.training_stats['failed'] = 0
+        self.training_stats['skipped'] = 0
+        self.training_stats['results'] = {}
         self.progress.start()
 
         pipeline_failed = False
@@ -176,14 +181,40 @@ class MLTrainingPipeline:
             logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
             logger.info(f"   Date range: {df.index[0]} to {df.index[-1]}")
 
-            # Обучить модель
+            # Обучить модель (first attempt, possibly with cached data)
             logger.info(f"🎓 Training model for {symbol}...")
             self.progress.begin_symbol(symbol, phase=TrainingProgressTracker.PHASE_TRAINING)
-            metrics = self.trainer.train_model(
-                symbol=symbol,
-                df=df,
-                test_size=0.2
-            )
+            try:
+                metrics = self.trainer.train_model(
+                    symbol=symbol,
+                    df=df,
+                    test_size=0.2
+                )
+            except Exception as train_err:  # Exception excludes KeyboardInterrupt/SystemExit
+                # If the first attempt fails (e.g. cached data is stale or the
+                # cleaned feature set is too small), fetch a fresh copy from the
+                # exchange and try once more before giving up.
+                logger.warning(
+                    f"First training attempt for {symbol} failed ({train_err}); "
+                    "retrying with fresh data from exchange..."
+                )
+                df = await self.data_fetcher.fetch_full_history(
+                    symbol=symbol,
+                    timeframe=self.timeframe,
+                    force_reload=True,  # bypass the cache
+                )
+                if df is None or len(df) < self.trainer.min_training_samples:
+                    raise ValueError(
+                        f"Insufficient data even after cache refresh: "
+                        f"{len(df) if df is not None else 0} candles"
+                    ) from train_err
+                logger.info(f"Reloaded {len(df)} candles for {symbol}, retrying training...")
+                # This second call is allowed to raise — caller will log the real error.
+                metrics = self.trainer.train_model(
+                    symbol=symbol,
+                    df=df,
+                    test_size=0.2
+                )
 
             if metrics:
                 logger.info(f"✅ Training completed for {symbol}")
@@ -191,7 +222,11 @@ class MLTrainingPipeline:
                 logger.info(f"   F1 Score: {metrics.f1_score:.4f}")
                 return metrics
             else:
-                raise ValueError("Training failed")
+                # train_model now re-raises on failure, so this branch is a
+                # safety net for any future caller that resets the old contract.
+                raise RuntimeError(
+                    f"train_model returned no metrics for {symbol}; check logs above"
+                )
         finally:
             # Always remove the lock file regardless of success / failure
             try:

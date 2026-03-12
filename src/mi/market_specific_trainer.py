@@ -522,7 +522,7 @@ class MarketSpecificTrainer:
 
         except Exception as e:
             logger.error(f"❌ Failed to train model for {symbol}: {e}", exc_info=True)
-            return None
+            raise  # re-raise so training_pipeline.py reports the actual root cause
 
     # ------------------------------------------------------------------
     # Incremental fine-tuning from live bot trades
