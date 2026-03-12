@@ -354,6 +354,10 @@ class MarketSpecificTrainer:
         future_return = future_return.loc[common_idx]
         regimes = regimes.loc[common_idx]
 
+        # Replace infinity values with NaN so they are caught by the filter below
+        # (some technical indicators produce inf on division-by-zero or log(0))
+        feat_df = feat_df.replace([np.inf, -np.inf], np.nan)
+
         # Drop rows with any remaining NaN in features
         # (first ~200 rows typically have NaN from rolling windows)
         valid_mask = ~feat_df.isnull().any(axis=1)
