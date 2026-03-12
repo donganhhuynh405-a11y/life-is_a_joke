@@ -116,12 +116,30 @@ class TelegramNotifier:
                 "parse_mode": parse_mode
             }
 
-            response = requests.post(url, json=payload, timeout=10)
+            # Use the CA bundle from the environment (set by start_bot.sh to the
+            # system CA store when certifi's cacert.pem is missing).  This makes
+            # HTTPS work correctly even after a disk-space-constrained venv rebuild
+            # that left certifi's bundle incomplete.
+            ca_bundle = (
+                os.environ.get('REQUESTS_CA_BUNDLE') or
+                os.environ.get('CURL_CA_BUNDLE') or
+                True  # default: let requests/certifi decide
+            )
+
+            response = requests.post(url, json=payload, timeout=10, verify=ca_bundle)
             response.raise_for_status()
 
             self.logger.info("Telegram message sent successfully")
             return True
 
+        except requests.exceptions.SSLError as e:
+            self.logger.error(
+                "Telegram SSL error — CA bundle may be missing. "
+                "Set REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt in the bot's "
+                "environment, or restart the bot via systemctl to trigger the automatic fix. "
+                f"Detail: {e}"
+            )
+            return False
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Failed to send Telegram message: {e}")
             return False

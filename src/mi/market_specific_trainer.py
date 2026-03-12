@@ -461,6 +461,11 @@ class MarketSpecificTrainer:
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
+            # StandardScaler produces NaN/inf when a feature has zero variance
+            # (std=0 → division by zero).  Apply nan_to_num after scaling to
+            # ensure sklearn never receives infinity in the training data.
+            X_train_scaled = np.nan_to_num(X_train_scaled, nan=0.0, posinf=0.0, neginf=0.0)
+            X_test_scaled = np.nan_to_num(X_test_scaled, nan=0.0, posinf=0.0, neginf=0.0)
 
             # Primary model: GradientBoosting (captures non-linear patterns well)
             try:

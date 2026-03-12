@@ -114,24 +114,43 @@ fi
 #   "Could not find a suitable TLS CA certificate bundle, invalid path: …"
 #
 # Strategy:
-#   1. Ask certifi where it expects its bundle to live.
-#   2. If the file is missing fall back to the system CA bundle.
-#   3. Export REQUESTS_CA_BUNDLE so the requests library (and ccxt) uses the
-#      system bundle for this process.
+#   1. Locate the system CA bundle (always present on Debian/Ubuntu/RHEL).
+#   2. Export REQUESTS_CA_BUNDLE and SSL_CERT_FILE to the system bundle
+#      unconditionally — this is always correct and overrides certifi when
+#      certifi's cacert.pem is missing or corrupted after an incomplete install.
+#   3. Additionally check certifi's reported path; if the file is absent
+#      reinstall certifi so future bot restarts work without the env-var override.
+
+# Find the system CA bundle (works on Debian/Ubuntu, RHEL/CentOS, Alpine)
+_SYS_CA=""
+for _ca in /etc/ssl/certs/ca-certificates.crt \
+           /etc/pki/tls/certs/ca-bundle.crt \
+           /etc/ssl/ca-bundle.pem \
+           /etc/ssl/certs/ca-bundle.crt; do
+    if [ -f "$_ca" ]; then
+        _SYS_CA="$_ca"
+        break
+    fi
+done
+
+if [ -n "$_SYS_CA" ]; then
+    # Always export so that requests/ccxt/urllib3 use the system bundle.
+    # This is a no-op when certifi is healthy, and a lifesaver when it is not.
+    export REQUESTS_CA_BUNDLE="$_SYS_CA"
+    export SSL_CERT_FILE="$_SYS_CA"
+    export CURL_CA_BUNDLE="$_SYS_CA"
+    echo "[start_bot] SSL CA bundle: $REQUESTS_CA_BUNDLE" >&2
+else
+    echo "[start_bot] WARNING: No system CA bundle found — TLS may fail if certifi is broken" >&2
+fi
+
+# Check whether certifi's bundle is actually present; if not, try to reinstall.
 CERTIFI_BUNDLE_PATH=$("$VENV_PYTHON" -c "import certifi; print(certifi.where())" 2>/dev/null || true)
 if [ -n "$CERTIFI_BUNDLE_PATH" ] && [ ! -f "$CERTIFI_BUNDLE_PATH" ]; then
     echo "[start_bot] WARNING: certifi CA bundle missing at $CERTIFI_BUNDLE_PATH" >&2
-    # Try the most common system CA paths
-    for sys_ca in /etc/ssl/certs/ca-certificates.crt \
-                  /etc/pki/tls/certs/ca-bundle.crt \
-                  /etc/ssl/ca-bundle.pem; do
-        if [ -f "$sys_ca" ]; then
-            export REQUESTS_CA_BUNDLE="$sys_ca"
-            export SSL_CERT_FILE="$sys_ca"
-            echo "[start_bot] Using system CA bundle: $sys_ca" >&2
-            break
-        fi
-    done
+    echo "[start_bot] Attempting to reinstall certifi (system CA bundle is already active)..." >&2
+    "$VENV_DIR/bin/pip" install --force-reinstall --no-cache-dir certifi 2>&1 \
+        | sed 's/^/[start_bot] /' >&2 || true
 fi
 
 # Launch the bot
