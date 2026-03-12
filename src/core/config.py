@@ -80,9 +80,20 @@ class Config:
         self.max_position_size_pct = float(_env('MAX_POSITION_SIZE_PCT', '5.0'))  # % of balance
 
         # Notifications
-        self.enable_notifications = _env('ENABLE_NOTIFICATIONS', 'false').lower() == 'true'
-        self.telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
-        self.telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+        # Auto-enable when both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set,
+        # so users don't need to remember to also set ENABLE_NOTIFICATIONS=true.
+        _token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+        _chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+        _explicit = _env('ENABLE_NOTIFICATIONS', '').lower()
+        if _explicit == 'false':
+            self.enable_notifications = False
+        elif _explicit == 'true':
+            self.enable_notifications = True
+        else:
+            # Auto-enable when credentials are present
+            self.enable_notifications = bool(_token and _chat_id)
+        self.telegram_bot_token = _token
+        self.telegram_chat_id = _chat_id
 
         # Web interface
         self.web_enabled = _env('WEB_ENABLED', 'false').lower() == 'true'

@@ -369,6 +369,13 @@ class MarketSpecificTrainer:
             raise ValueError(
                 f"Insufficient data after cleaning: {len(feat_df)} < {self.min_training_samples}")
 
+        # Clip to float32-representable range before casting.
+        # Large float64 values (e.g. 1e300) are finite in float64 but overflow
+        # to ±inf when cast to float32 (max ~3.4e38), causing sklearn to raise
+        # "Input X contains infinity or a value too large for dtype('float32')".
+        _f32_max = float(np.finfo(np.float32).max)
+        feat_df = feat_df.clip(lower=-_f32_max, upper=_f32_max)
+
         X = feat_df.values.astype(np.float32)
         feature_cols = list(feat_df.columns)  # saved during train_model
 
@@ -446,6 +453,11 @@ class MarketSpecificTrainer:
 
             # Normalise
             from sklearn.preprocessing import StandardScaler
+            # Final safety pass: replace any inf/NaN that may have been introduced
+            # during regime-balanced oversampling or feature engineering edge cases.
+            _f32_max = float(np.finfo(np.float32).max)
+            X_train = np.nan_to_num(X_train, nan=0.0, posinf=_f32_max, neginf=-_f32_max)
+            X_test = np.nan_to_num(X_test, nan=0.0, posinf=_f32_max, neginf=-_f32_max)
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)

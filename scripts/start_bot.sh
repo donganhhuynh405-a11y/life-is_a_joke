@@ -104,5 +104,35 @@ else
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# SSL / certifi health check
+# ---------------------------------------------------------------------------
+# If the venv was rebuilt after a near-full disk the certifi CA bundle may be
+# incomplete (cacert.pem present in the package metadata but the actual file
+# was not written).  This causes all HTTPS connections — to the exchange API,
+# Telegram, news feeds — to fail with:
+#   "Could not find a suitable TLS CA certificate bundle, invalid path: …"
+#
+# Strategy:
+#   1. Ask certifi where it expects its bundle to live.
+#   2. If the file is missing fall back to the system CA bundle.
+#   3. Export REQUESTS_CA_BUNDLE so the requests library (and ccxt) uses the
+#      system bundle for this process.
+CERTIFI_BUNDLE_PATH=$("$VENV_PYTHON" -c "import certifi; print(certifi.where())" 2>/dev/null || true)
+if [ -n "$CERTIFI_BUNDLE_PATH" ] && [ ! -f "$CERTIFI_BUNDLE_PATH" ]; then
+    echo "[start_bot] WARNING: certifi CA bundle missing at $CERTIFI_BUNDLE_PATH" >&2
+    # Try the most common system CA paths
+    for sys_ca in /etc/ssl/certs/ca-certificates.crt \
+                  /etc/pki/tls/certs/ca-bundle.crt \
+                  /etc/ssl/ca-bundle.pem; do
+        if [ -f "$sys_ca" ]; then
+            export REQUESTS_CA_BUNDLE="$sys_ca"
+            export SSL_CERT_FILE="$sys_ca"
+            echo "[start_bot] Using system CA bundle: $sys_ca" >&2
+            break
+        fi
+    done
+fi
+
 # Launch the bot
 exec "$VENV_PYTHON" "$MAIN_PY" "$@"

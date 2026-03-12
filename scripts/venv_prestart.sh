@@ -135,3 +135,25 @@ else
     log "requirements.txt unchanged — skipping pip install."
 fi
 
+# 4. Verify that certifi's CA bundle is intact.
+#    If the venv was deleted and recreated while the disk was nearly full,
+#    certifi may have been partially installed — its cacert.pem may be missing.
+#    This causes "Could not find a suitable TLS CA certificate bundle" errors
+#    that break all HTTPS connections (exchange API, Telegram, etc.).
+CERTIFI_BUNDLE_PATH=$("$VENV_PYTHON" -c "import certifi; print(certifi.where())" 2>/dev/null || true)
+if [ -n "$CERTIFI_BUNDLE_PATH" ] && [ ! -f "$CERTIFI_BUNDLE_PATH" ]; then
+    log "WARNING: certifi CA bundle missing at $CERTIFI_BUNDLE_PATH — reinstalling certifi..."
+    "$VENV_PIP" install --force-reinstall --no-cache-dir certifi 2>&1 | sed 's/^/[prestart] /' >&2
+    if id "$SERVICE_USER" &>/dev/null; then
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$VENV_DIR"
+    fi
+    log "certifi reinstalled."
+elif [ -z "$CERTIFI_BUNDLE_PATH" ]; then
+    log "WARNING: certifi not importable — installing..."
+    "$VENV_PIP" install --no-cache-dir certifi 2>&1 | sed 's/^/[prestart] /' >&2
+    if id "$SERVICE_USER" &>/dev/null; then
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$VENV_DIR"
+    fi
+    log "certifi installed."
+fi
+
