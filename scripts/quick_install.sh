@@ -1,6 +1,6 @@
 #!/bin/bash
 # Quick download and install script for the trading bot
-# Usage: curl -sL https://raw.githubusercontent.com/donganhhuynh405-a11y/Life_Is_A_Joke/main/scripts/quick_install.sh | bash
+# Usage: curl -sL https://raw.githubusercontent.com/donganhhuynh405-a11y/life-is_a_joke/main/scripts/quick_install.sh | bash
 
 set -e
 
@@ -10,7 +10,7 @@ echo "======================================================"
 echo ""
 
 # Configuration
-REPO_URL="https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git"
+REPO_URL="https://github.com/donganhhuynh405-a11y/life-is_a_joke.git"
 
 # Default branch is 'main'; can be overridden by CLI arg or env var QUICK_INSTALL_BRANCH
 DEFAULT_BRANCH="main"
@@ -23,7 +23,7 @@ else
 fi
 
 # Installation directory; can be overridden by env var QUICK_INSTALL_DIR
-INSTALL_DIR="${QUICK_INSTALL_DIR:-$HOME/life_is_a_joke}"
+INSTALL_DIR="${QUICK_INSTALL_DIR:-/opt/trading-bot}"
 # Check if git is installed
 if ! command -v git &> /dev/null; then
     echo "❌ Error: Git is not installed!"

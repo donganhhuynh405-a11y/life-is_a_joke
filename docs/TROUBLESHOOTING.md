@@ -1,5 +1,85 @@
 # 🔧 РУКОВОДСТВО ПО УСТРАНЕНИЮ НЕПОЛАДОК
 
+---
+
+## 🆘 БЫСТРОЕ ИСПРАВЛЕНИЕ: status=203/EXEC (бот вообще не запускается)
+
+Если в `journalctl` вы видите строку:
+
+```
+trading-bot.service: Main process exited, code=exited, status=203/EXEC
+```
+
+Это означает, что systemd **не может найти исполняемый файл Python** (обычно потому, что
+виртуальное окружение не создано или использует имя `python` вместо `python3`).
+
+### ⚡ Одна команда для исправления
+
+```bash
+sudo bash /opt/trading-bot/scripts/fix_exec_error.sh
+```
+
+Скрипт автоматически:
+1. Диагностирует причину
+2. Пересоздаёт виртуальное окружение
+3. Устанавливает зависимости
+4. Обновляет файл службы (заменяет `python` → `python3`)
+5. Перезапускает сервис
+
+### 🔧 Ручное исправление (если скрипт недоступен)
+
+```bash
+# 1. Остановить сервис
+sudo systemctl stop trading-bot
+
+# 2. Пересоздать виртуальное окружение
+cd /opt/trading-bot
+sudo python3 -m venv venv
+sudo venv/bin/pip install --upgrade pip
+sudo venv/bin/pip install -r requirements.txt
+
+# 3. Исправить путь в файле службы (python → python3)
+sudo sed -i 's|venv/bin/python |venv/bin/python3 |g' /etc/systemd/system/trading-bot.service
+sudo systemctl daemon-reload
+
+# 4. Исправить права доступа
+sudo chown -R tradingbot:tradingbot /opt/trading-bot/venv
+
+# 5. Запустить сервис
+sudo systemctl start trading-bot
+sudo systemctl status trading-bot
+```
+
+---
+
+## 🆘 БЫСТРОЕ ИСПРАВЛЕНИЕ: `git pull` завершается с ошибкой "local changes"
+
+Если `git pull` выдаёт:
+```
+error: Your local changes to the following files would be overwritten by merge:
+Please commit your changes or stash them before you merge.
+```
+
+### ⚡ Исправление
+
+```bash
+# Сохранить локальные изменения в stash и обновить код
+cd /opt/trading-bot
+git stash push --include-untracked -m "backup before update $(date)"
+git pull origin main   # или укажите нужную ветку вместо 'main'
+
+# Затем перезапустить сервис
+sudo systemctl restart trading-bot
+```
+
+Или используйте готовый скрипт обновления, который делает всё это автоматически:
+```bash
+sudo bash /opt/trading-bot/scripts/update_bot.sh --branch main
+# Замените 'main' на нужную ветку, если вы работаете с другой веткой
+```
+
+---
+
 ## Ошибка: trading-bot.service: Failed with result 'exit-code'
 
 Эта ошибка означает, что служба не смогла запуститься. Следуйте шагам ниже для диагностики и исправления.
@@ -71,7 +151,7 @@ sudo chmod 600 /etc/trading-bot/.env
 
 ### 2.4 Проверьте виртуальное окружение Python:
 ```bash
-ls -la /opt/trading-bot/venv/bin/python
+ls -la /opt/trading-bot/venv/bin/python3
 ```
 
 **Если отсутствует:**
@@ -176,12 +256,15 @@ grep -E "(ExecStart|WorkingDirectory|EnvironmentFile)" /etc/systemd/system/tradi
 ```
 WorkingDirectory=/opt/trading-bot
 EnvironmentFile=/etc/trading-bot/.env
-ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/src/main.py
+ExecStart=/opt/trading-bot/venv/bin/python3 /opt/trading-bot/src/main.py
 ```
 
-### 4.3 Если файл службы неправильный, исправьте:
+### 4.3 Если файл службы неправильный, исправьте (или запустите fix_exec_error.sh):
 ```bash
-sudo nano /etc/systemd/system/trading-bot.service
+sudo bash /opt/trading-bot/scripts/fix_exec_error.sh
+# или вручную:
+sudo sed -i 's|venv/bin/python |venv/bin/python3 |g' /etc/systemd/system/trading-bot.service
+sudo systemctl daemon-reload
 ```
 
 ### 4.4 Перезагрузите systemd:
@@ -237,7 +320,7 @@ echo -e "\n=== Проверка .env файла ==="
 sudo ls -l /etc/trading-bot/.env
 
 echo -e "\n=== Проверка виртуального окружения ==="
-ls -l /opt/trading-bot/venv/bin/python
+ls -l /opt/trading-bot/venv/bin/python3
 
 echo -e "\n=== Проверка установленных пакетов ==="
 /opt/trading-bot/venv/bin/pip list | grep -E "(binance|ccxt|pandas|numpy)"

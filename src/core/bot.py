@@ -34,6 +34,8 @@ class TradingBot:
         self.last_hourly_notification = None
         self.news_aggregator_thread = None
         self.news_aggregator_loop = None
+        self.ml_training_thread = None
+        self.ml_training_loop = None
 
         if not config.validate():
             raise ValueError("Invalid configuration")
@@ -53,8 +55,16 @@ class TradingBot:
 
             self.logger.info(f"Connected to {exchange_name} {testnet_str} ({mode_str})")
         except Exception as e:
-            self.logger.error(f"Failed to initialize exchange: {e}")
-            raise
+            if not config.trading_enabled:
+                # Trading is disabled — exchange connectivity is not required.
+                # Log a warning and continue so the container stays alive.
+                self.logger.warning(
+                    f"Exchange not available (trading is disabled, this is OK): {e}"
+                )
+                self.exchange = None
+            else:
+                self.logger.error(f"Failed to initialize exchange: {e}")
+                raise
 
         self.client = self.exchange
 
@@ -210,6 +220,117 @@ class TradingBot:
 
         self.logger.info("Trading bot initialization complete")
 
+        # Initialize HealthMonitor (exposes Prometheus metrics on port 8001,
+        # required for the Docker HEALTHCHECK to pass)
+        self.health_monitor = None
+        try:
+            from health_monitor import HealthMonitor
+            self.health_monitor = HealthMonitor(config)
+            self.logger.info("Health monitor initialized")
+        except Exception as e:
+            self.logger.warning(f"Health monitor not available: {e}")
+
+    def _start_health_monitor_background(self):
+        """Start HealthMonitor in a background thread with its own event loop.
+
+        This exposes the Prometheus metrics HTTP server on port 8001, which is
+        what the Docker HEALTHCHECK probes.
+        """
+        if not self.health_monitor:
+            return
+
+        def run_health_monitor():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.health_monitor.start())
+                loop.run_forever()
+            except Exception as e:
+                self.logger.error(f"Error in health monitor thread: {e}", exc_info=True)
+
+        thread = threading.Thread(target=run_health_monitor, daemon=True, name='health-monitor')
+        thread.start()
+        self.logger.info("✅ Health monitor started on port 8001")
+
+    def _start_ml_training_background(self):
+        """Start ML model training in a background thread with its own event loop.
+
+        Training runs once at startup (skipping symbols that already have up-to-date
+        models), then repeats every 7 days so models stay fresh.
+        """
+        models_dir = self.config.models_dir
+        symbols = self.config.trading_symbols
+
+        def run_ml_training():
+            """Async training loop executed in a dedicated background thread."""
+            try:
+                self.logger.info("=" * 70)
+                self.logger.info("🤖 STARTING ML TRAINING BACKGROUND TASK...")
+                self.logger.info("=" * 70)
+
+                self.ml_training_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.ml_training_loop)
+
+                from mi.training_pipeline import MLTrainingPipeline
+
+                # Retrain interval: every 7 days (in seconds)
+                retrain_interval_secs = 7 * 24 * 3600
+
+                # Create once; recreated only when the loop restarts after retraining
+                pipeline = MLTrainingPipeline(
+                    exchange=self.exchange,
+                    symbols=symbols,
+                    timeframe='1h',
+                    force_retrain=False,
+                    models_dir=models_dir,
+                )
+
+                while self.running:
+                    try:
+                        self.ml_training_loop.run_until_complete(pipeline.train_all_symbols())
+                        self.logger.info("✅ ML training cycle complete")
+                    except Exception as exc:
+                        self.logger.error(f"❌ ML training cycle error: {exc}", exc_info=True)
+
+                    # Wait for next cycle (check every minute so we can exit cleanly)
+                    waited = 0
+                    while self.running and waited < retrain_interval_secs:
+                        time.sleep(60)
+                        waited += 60
+
+                    # Reset stats for the next retraining cycle
+                    if self.running:
+                        pipeline = MLTrainingPipeline(
+                            exchange=self.exchange,
+                            symbols=symbols,
+                            timeframe='1h',
+                            force_retrain=False,
+                            models_dir=models_dir,
+                        )
+
+            except Exception as exc:
+                self.logger.error(
+                    f"❌ Fatal error in ML training background thread: {exc}",
+                    exc_info=True)
+            finally:
+                if self.ml_training_loop:
+                    self.ml_training_loop.close()
+
+        self.ml_training_thread = threading.Thread(
+            target=run_ml_training,
+            name='ml-training',
+            daemon=True,
+        )
+        self.ml_training_thread.start()
+        self.logger.info("✅ ML training thread started")
+
+    def _stop_ml_training_background(self):
+        """Signal the ML training thread to stop (it checks self.running)."""
+        if self.ml_training_thread and self.ml_training_thread.is_alive():
+            self.logger.info("Stopping ML training thread...")
+            # self.running is already False at this point; the thread will exit
+            # on its next 60-second sleep tick.
+
     def _start_news_aggregator_background(self):
         """Start news aggregator in a background thread with its own event loop"""
         if not self.news_aggregator:
@@ -280,6 +401,12 @@ class TradingBot:
         # Start news aggregator background task
         self._start_news_aggregator_background()
 
+        # Start ML model training background task
+        self._start_ml_training_background()
+
+        # Start HealthMonitor (opens port 8001 for Docker HEALTHCHECK)
+        self._start_health_monitor_background()
+
         # Send startup notification
         if self.notifier:
             self.notifier.notify_bot_started(
@@ -293,9 +420,19 @@ class TradingBot:
         self.running = True
 
         try:
-            # Get account info
-            account = self.exchange.get_account()
-            self.logger.info(f"Account status: Can trade: {account.get('canTrade', True)}")
+            # Get account info (skip when exchange is unavailable or trading disabled)
+            if self.exchange is not None:
+                try:
+                    account = self.exchange.get_account()
+                    self.logger.info(f"Account status: Can trade: {account.get('canTrade', True)}")
+                except Exception as e:
+                    if self.config.trading_enabled:
+                        raise
+                    self.logger.warning(
+                        f"Could not fetch account info (trading is disabled, this is OK): {e}"
+                    )
+            else:
+                self.logger.info("Exchange not connected — running in monitoring-only mode")
 
             # Main loop
             while self.running:
@@ -343,6 +480,9 @@ class TradingBot:
 
         # Stop news aggregator
         self._stop_news_aggregator_background()
+
+        # Stop ML training thread
+        self._stop_ml_training_background()
 
         # Send shutdown notification
         if hasattr(self, 'notifier') and self.notifier:
@@ -655,11 +795,21 @@ class TradingBot:
                                 for pos in open_positions[:3]:  # Show first 3
                                     try:
                                         # Update elite position management
+                                        symbol = pos.get('symbol')
+                                        if not symbol:
+                                            continue
+                                        try:
+                                            ticker = self.exchange.get_symbol_ticker(symbol)
+                                            current_price = float(ticker.get('price', 0))
+                                        except Exception as price_err:
+                                            self.logger.warning(
+                                                f"  Could not fetch price for {symbol}: {price_err}; skipping position update")
+                                            continue
                                         updated = self.elite_integrator.update_position_management(
-                                            pos)
+                                            symbol, pos, current_price)
                                         if updated:
                                             self.logger.info(
-                                                f"  Updated position {pos.get('symbol')}: {updated}")
+                                                f"  Updated position {symbol}: {updated}")
                                     except Exception as e:
                                         self.logger.error(
                                             f"Error updating position management: {e}")
@@ -753,20 +903,43 @@ class TradingBot:
             self.logger.error(f"Error sending hourly notification: {e}", exc_info=True)
 
     def _collect_ml_status(self) -> dict:
-        """Read ML model metrics (accuracy, F1, training date) for all symbols.
+        """Read ML model metrics (accuracy, F1, precision, recall, training date) for all symbols.
 
         Returns a dict keyed by symbol (e.g. 'BTCUSDT') with their metrics,
-        plus optional private keys '_training_active' and '_training_symbol'.
+        plus optional private keys '_training_active', '_training_symbol', and
+        '_summary' (aggregated stats across all trained models).
+
+        The dict is always returned (never None).  An empty dict means no models
+        have been trained yet.  The notification layer uses `is not None` to
+        decide whether to render the section, so even an empty dict will produce
+        a "No models trained yet" message.
         """
         import json
-        import os
         from pathlib import Path
+        from datetime import datetime
 
-        models_dir = Path(getattr(self.config, 'models_dir', '/var/lib/trading-bot/models'))
+        models_dir = Path(self.config.models_dir)
         result: dict = {}
+
+        # ── Training-in-progress detection ────────────────────────────────────
+        # The training pipeline writes a lock file while a symbol is being trained
+        # (see MLTrainingPipeline.train_symbol).  We pick it up here so the
+        # notification can display a real-time "🔄 Training in progress" indicator.
+        lock_file = models_dir / '.training.lock'
+        if lock_file.exists():
+            try:
+                lock_data = json.loads(lock_file.read_text())
+                result['_training_active'] = True
+                result['_training_symbol'] = lock_data.get('symbol', '')
+            except Exception:
+                result['_training_active'] = True
+                result['_training_symbol'] = ''
 
         if not models_dir.exists():
             return result
+
+        trained_count = 0
+        total_accuracy = 0.0
 
         try:
             for symbol_dir in sorted(models_dir.iterdir()):
@@ -778,16 +951,46 @@ class TradingBot:
                 try:
                     with open(metrics_path, 'r') as f:
                         metrics = json.load(f)
+
+                    training_date = metrics.get('training_date', '')
+                    days_old: int | None = None
+                    if training_date:
+                        try:
+                            trained_dt = datetime.fromisoformat(training_date)
+                            # Strip timezone info from both sides to compare naive datetimes
+                            if trained_dt.tzinfo is not None:
+                                trained_dt = trained_dt.replace(tzinfo=None)
+                            delta = (datetime.now() - trained_dt).days
+                            # Negative values can appear if the clock is skewed; clamp to 0
+                            days_old = max(0, delta)
+                        except Exception:
+                            pass
+
+                    acc = metrics.get('accuracy', 0)
+                    trained_count += 1
+                    total_accuracy += acc
+
                     result[symbol_dir.name] = {
-                        'accuracy': metrics.get('accuracy', 0),
+                        'accuracy': acc,
                         'f1_score': metrics.get('f1_score', 0),
+                        'precision': metrics.get('precision', 0),
+                        'recall': metrics.get('recall', 0),
                         'train_samples': metrics.get('train_samples', 0),
-                        'training_date': metrics.get('training_date', ''),
+                        'test_samples': metrics.get('test_samples', 0),
+                        'training_date': training_date,
+                        'days_old': days_old,
+                        'model_version': metrics.get('model_version', '1.0'),
                     }
                 except Exception as exc:
                     self.logger.debug(f"Could not read ML metrics for {symbol_dir.name}: {exc}")
         except Exception as exc:
             self.logger.warning(f"Could not scan ML models directory: {exc}")
+
+        if trained_count > 0:
+            result['_summary'] = {
+                'trained_count': trained_count,
+                'avg_accuracy': total_accuracy / trained_count,
+            }
 
         return result
 

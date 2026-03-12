@@ -7,6 +7,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from utils.env import getenv as _env
 
 
 def parse_size(size_str: str) -> int:
@@ -61,13 +62,13 @@ def setup_logger(name: str = None) -> logging.Logger:
     Returns:
         Configured logger instance
     """
-    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    log_level = _env('LOG_LEVEL', 'INFO').upper()
     log_dir = os.getenv('LOG_DIR', '/var/log/trading-bot')
     log_file = os.getenv('LOG_FILE', 'trading-bot.log')
-    log_to_file = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'
-    log_to_console = os.getenv('LOG_TO_CONSOLE', 'true').lower() == 'true'
-    log_max_size = parse_size(os.getenv('LOG_MAX_SIZE', '104857600'))
-    log_backup_count = int(os.getenv('LOG_BACKUP_COUNT', '10'))
+    log_to_file = _env('LOG_TO_FILE', 'true').lower() == 'true'
+    log_to_console = _env('LOG_TO_CONSOLE', 'true').lower() == 'true'
+    log_max_size = parse_size(_env('LOG_MAX_SIZE', '104857600'))
+    log_backup_count = int(_env('LOG_BACKUP_COUNT', '10'))
 
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, log_level, logging.INFO))

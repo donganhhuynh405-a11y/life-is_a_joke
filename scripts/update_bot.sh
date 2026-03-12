@@ -24,9 +24,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git"
-REPO_DIR="$HOME/trading-bot-setup/life_is_a_joke"
-BOT_DIR="/opt/Life_Is_A_Joke"
+REPO_URL="https://github.com/donganhhuynh405-a11y/life-is_a_joke.git"
+REPO_DIR="/opt/trading-bot"
+BOT_DIR="/opt/trading-bot"
 SERVICE_NAME="trading-bot"
 BRANCH="main"  # Default to stable branch; override with --branch for PR/feature branches
 
@@ -38,7 +38,7 @@ print_usage() {
 }
 
 # Parse optional --branch argument so the user can deploy a specific PR branch.
-# Usage: sudo ./scripts/update_bot.sh --branch copilot/update-notification-format
+# Usage: sudo ./scripts/update_bot.sh --branch main
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --branch|-b)
@@ -103,7 +103,7 @@ print_status "Checking repository directory: $REPO_DIR"
 if [ ! -d "$REPO_DIR" ]; then
     print_warning "Repository directory not found, cloning it..."
     mkdir -p "$(dirname "$REPO_DIR")"
-    git clone "$REPO_URL" "$REPO_DIR"
+    git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
     print_success "Repository cloned successfully"
 fi
 
@@ -118,6 +118,24 @@ git fetch origin
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 print_status "Current branch: $CURRENT_BRANCH"
 
+# Step 4a: Stash any local modifications so git pull cannot fail due to conflicts
+# Use git status --porcelain to detect ALL local changes (modified, staged, untracked)
+if [ -z "$(git status --porcelain)" ]; then
+    print_status "No local changes to stash"
+else
+    print_warning "Local changes detected — stashing them so the pull can proceed..."
+    if git stash push --include-untracked -m "Auto-stash before update $(date)"; then
+        print_success "Local changes stashed"
+    else
+        print_error "git stash failed.  Cannot safely pull without losing local changes."
+        print_error "Please manually commit or discard your local changes and re-run this script:"
+        print_error "  git status  (to see what changed)"
+        print_error "  git stash   (to save changes)"
+        print_error "  git checkout -- <file>  (to discard a specific file)"
+        exit 1
+    fi
+fi
+
 # Step 5: Checkout and pull the target branch
 if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
     print_status "Switching to branch: $BRANCH"
@@ -128,16 +146,46 @@ print_status "Pulling latest changes..."
 git pull origin "$BRANCH"
 print_success "Repository updated to latest version"
 
-# Step 6: Copy files to bot directory
-print_status "Copying updated files to bot directory: $BOT_DIR"
-if [ ! -d "$BOT_DIR" ]; then
-    print_warning "Bot directory doesn't exist, creating it..."
-    mkdir -p "$BOT_DIR"
+# Step 5a: Ensure all scripts in the repo are executable
+print_status "Ensuring scripts are executable..."
+chmod +x "$REPO_DIR"/scripts/*.sh 2>/dev/null || true
+print_success "Script permissions set"
+
+# Step 5b: Update the installed systemd service file to match the repo
+SERVICE_SRC="$REPO_DIR/deployment/systemd/trading-bot.service"
+SERVICE_DST="/etc/systemd/system/trading-bot.service"
+if [ -f "$SERVICE_SRC" ]; then
+    if ! diff -q "$SERVICE_SRC" "$SERVICE_DST" > /dev/null 2>&1; then
+        print_status "Updating systemd service file..."
+        cp "$SERVICE_SRC" "$SERVICE_DST"
+        systemctl daemon-reload
+        print_success "systemd service file updated and daemon reloaded"
+    else
+        print_status "systemd service file is already up to date"
+    fi
 fi
 
-# Copy all files except .git directory
-rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' "$REPO_DIR/" "$BOT_DIR/"
-print_success "Files copied successfully"
+# Step 6: Clean Python cache files
+print_status "Cleaning Python cache files..."
+find "$BOT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+find "$BOT_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
+print_success "Cache files cleaned"
+
+# Step 6a: Ensure the virtual environment exists and install/update dependencies
+VENV_PYTHON="$BOT_DIR/venv/bin/python3"
+if [ ! -x "$VENV_PYTHON" ]; then
+    print_warning "Virtual environment not found or python3 missing — creating venv..."
+    python3 -m venv "$BOT_DIR/venv"
+    print_success "Virtual environment created"
+fi
+print_status "Updating Python dependencies..."
+# Do NOT run 'pip install --upgrade pip': unnecessary at update time and it
+# overwrites the pip binary which can fail with permission errors when the venv
+# is owned by a different user.
+"$BOT_DIR/venv/bin/pip" install -r "$BOT_DIR/requirements.txt" --quiet
+# Record the stamp so start_bot.sh does not re-attempt pip install on startup.
+sha256sum "$BOT_DIR/requirements.txt" > "$BOT_DIR/venv/.requirements_installed" 2>/dev/null || true
+print_success "Python dependencies installed"
 
 # Step 7: Set correct ownership
 print_status "Setting correct file ownership..."
@@ -149,15 +197,8 @@ else
     print_warning "If you have a different user for the bot, please update manually"
 fi
 
-# Step 8: Clean up Python cache files
-print_status "Cleaning up Python cache files..."
-find "$BOT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-find "$BOT_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
-print_success "Cache files cleaned"
-
-# Step 9: Show git commit info
+# Step 8: Show git commit info
 print_status "Current version information:"
-cd "$REPO_DIR"
 COMMIT_HASH=$(git rev-parse --short HEAD)
 COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
 COMMIT_DATE=$(git log -1 --pretty=%ci)
@@ -165,7 +206,7 @@ echo "  Commit: $COMMIT_HASH"
 echo "  Message: $COMMIT_MSG"
 echo "  Date: $COMMIT_DATE"
 
-# Step 10: Start the trading bot service
+# Step 9: Start the trading bot service
 print_status "Starting trading bot service..."
 systemctl start "$SERVICE_NAME"
 
@@ -182,7 +223,7 @@ else
     exit 1
 fi
 
-# Step 11: Show service status
+# Step 10: Show service status
 print_status "Service status:"
 systemctl status "$SERVICE_NAME" --no-pager -l | head -n 15
 

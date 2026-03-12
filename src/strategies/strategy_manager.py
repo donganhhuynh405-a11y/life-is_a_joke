@@ -713,16 +713,51 @@ class StrategyManager:
         position_id = signal.get('position_id')
         score = signal.get('confidence')  # Get signal score
 
+        # resolved_position is used when position_id is NULL (legacy SERIAL bug)
+        resolved_position = None
+
         if not position_id:
-            self.logger.warning("No position ID in close signal")
-            return
+            # Fallback: try to find the open position by symbol.
+            # This can happen when the database was created with "SERIAL PRIMARY KEY"
+            # (a SQLite bug that left id = NULL), or when the signal was generated
+            # without a position reference.
+            symbol = signal.get('symbol')
+            if symbol:
+                open_positions = self.db.get_open_positions()
+                match = next((p for p in open_positions if p.get('symbol') == symbol), None)
+                if match:
+                    position_id = match.get('id') or match.get('rowid')
+                    if position_id:
+                        self.logger.warning(
+                            f"Close signal had no position_id for {symbol}; "
+                            f"resolved to position {position_id} by symbol lookup"
+                        )
+                    else:
+                        # position id is still None/0 (legacy NULL id bug); use dict directly
+                        self.logger.warning(
+                            f"Close signal had no position_id for {symbol}; "
+                            "using symbol lookup (id still NULL — restart bot after DB fix)"
+                        )
+                        resolved_position = match
+                else:
+                    self.logger.warning(
+                        f"No position ID in close signal and no open position found for {symbol}"
+                    )
+                    return
+            else:
+                self.logger.warning("No position ID in close signal")
+                return
 
         try:
             # Get position details before closing
-            position = self.db.get_position(position_id)
+            position = resolved_position if resolved_position is not None else self.db.get_position(position_id)
             if not position:
                 self.logger.warning(f"Position {position_id} not found")
                 return
+
+            # Ensure position_id is set (may still be None for legacy NULL-id rows)
+            if not position_id:
+                position_id = position.get('id') or position.get('rowid')
 
             if position.get('status') == 'closed':
                 self.logger.warning(f"Position {position_id} is already closed, skipping close operation")
@@ -870,6 +905,60 @@ class StrategyManager:
 
             self.logger.info(
                 f"Position {position_id} closed with P&L: ${pnl:.2f} ({pnl_percent:+.2f}%)")
+
+            # Fine-tune the ML model with this trade outcome so live results
+            # layer on top of the historical foundation.
+            try:
+                from mi.market_specific_trainer import MarketSpecificTrainer
+                import os
+                models_dir = os.getenv('ML_MODELS_DIR', '/var/lib/trading-bot/models')
+                _trainer = MarketSpecificTrainer(models_dir=models_dir)
+
+                # Build a minimal OHLCV DataFrame from available exchange data
+                _recent_df = None
+                try:
+                    raw_klines = self.client.get_klines(
+                        symbol=symbol, interval='1h', limit=120)
+                    if raw_klines:
+                        import pandas as pd
+                        _recent_df = pd.DataFrame(raw_klines, columns=[
+                            'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                            'close_time', 'quote_volume', 'trades',
+                            'taker_buy_base', 'taker_buy_quote', 'ignore'
+                        ])
+                        _recent_df['timestamp'] = pd.to_datetime(
+                            _recent_df['timestamp'], unit='ms')
+                        _recent_df.set_index('timestamp', inplace=True)
+                        for _col in ['open', 'high', 'low', 'close', 'volume']:
+                            _recent_df[_col] = _recent_df[_col].astype(float)
+                        _recent_df = _recent_df[['open', 'high', 'low', 'close', 'volume']]
+                except Exception as _kl_err:
+                    self.logger.debug(f"Could not fetch klines for fine-tune: {_kl_err}")
+
+                if _recent_df is not None and len(_recent_df) >= 60:
+                    # Map the trade to the model's target space (UP=1 / DOWN=-1 / HOLD=0).
+                    # The target represents the ACTUAL correct direction, not the P&L sign:
+                    #   profitable BUY → price went UP   → correct direction was 1
+                    #   profitable SELL → price went DOWN → correct direction was -1
+                    #   losing BUY → price went DOWN → correct direction was -1
+                    #   losing SELL → price went UP → correct direction was 1
+                    #   breakeven → no clear signal → 0
+                    if pnl > 0 and side == 'BUY':
+                        _outcome = 1    # Price moved UP — long was correct
+                    elif pnl > 0 and side == 'SELL':
+                        _outcome = -1   # Price moved DOWN — short was correct
+                    elif pnl < 0 and side == 'BUY':
+                        _outcome = -1   # Price moved DOWN — long was wrong
+                    elif pnl < 0 and side == 'SELL':
+                        _outcome = 1    # Price moved UP — short was wrong
+                    else:
+                        _outcome = 0    # Breakeven
+                    _trainer.fine_tune_from_trade(
+                        symbol=symbol, recent_df=_recent_df, trade_outcome=_outcome)
+                    self.logger.debug(
+                        f"ML fine-tune applied for {symbol} (outcome={_outcome})")
+            except Exception as _ft_err:
+                self.logger.debug(f"ML fine-tune skipped: {_ft_err}")
 
             # Get current open positions count for notification
             open_positions_count = len(self.db.get_open_positions())

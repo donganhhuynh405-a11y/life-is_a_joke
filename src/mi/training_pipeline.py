@@ -5,12 +5,15 @@ ML Training Pipeline
 Запускается при старте бота и периодически для переобучения.
 """
 
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional
 
 from .historical_data_fetcher import HistoricalDataFetcher
 from .market_specific_trainer import MarketSpecificTrainer, ModelMetrics
+from .training_progress import TrainingProgressTracker, DEFAULT_PROGRESS_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,9 @@ class MLTrainingPipeline:
         exchange,
         symbols: List[str],
         timeframe: str = '1h',
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        models_dir: str = '/var/lib/trading-bot/models',
+        progress_file: Path = DEFAULT_PROGRESS_FILE,
     ):
         """
         Args:
@@ -33,6 +38,8 @@ class MLTrainingPipeline:
             symbols: Список торговых символов
             timeframe: Таймфрейм для обучения
             force_retrain: Принудительное переобучение существующих моделей
+            models_dir: Директория для хранения обученных моделей
+            progress_file: Path where live training progress JSON is written
         """
         self.exchange = exchange
         self.symbols = symbols
@@ -40,7 +47,13 @@ class MLTrainingPipeline:
         self.force_retrain = force_retrain
 
         self.data_fetcher = HistoricalDataFetcher(exchange)
-        self.trainer = MarketSpecificTrainer()
+        self.trainer = MarketSpecificTrainer(models_dir=models_dir)
+
+        # Real-time progress tracker (written to disk at every step)
+        self.progress = TrainingProgressTracker(
+            symbols=symbols,
+            progress_file=progress_file,
+        )
 
         # Статистика обучения
         self.training_stats = {
@@ -69,37 +82,55 @@ class MLTrainingPipeline:
         logger.info("=" * 80)
 
         self.training_stats['started_at'] = datetime.now().isoformat()
+        self.training_stats['completed_at'] = None
+        self.training_stats['successful'] = 0
+        self.training_stats['failed'] = 0
+        self.training_stats['skipped'] = 0
+        self.training_stats['results'] = {}
+        self.progress.start()
 
-        for i, symbol in enumerate(self.symbols, 1):
-            logger.info(f"\n{'=' * 80}")
-            logger.info(f"📈 Processing {symbol} ({i}/{len(self.symbols)})")
-            logger.info(f"{'=' * 80}")
+        pipeline_failed = False
+        try:
+            for i, symbol in enumerate(self.symbols, 1):
+                logger.info(f"\n{'=' * 80}")
+                logger.info(f"📈 Processing {symbol} ({i}/{len(self.symbols)})")
+                logger.info(f"{'=' * 80}")
 
-            try:
-                result = await self.train_symbol(symbol)
+                try:
+                    result = await self.train_symbol(symbol)
 
-                if result:
-                    self.training_stats['successful'] += 1
+                    if result:
+                        self.training_stats['successful'] += 1
+                        self.training_stats['results'][symbol] = {
+                            'status': 'success',
+                            'metrics': result.to_dict() if isinstance(result, ModelMetrics) else result
+                        }
+                        self.progress.finish_symbol(
+                            symbol, status='success',
+                            metrics=result.to_dict() if isinstance(result, ModelMetrics) else result
+                        )
+                    else:
+                        self.training_stats['skipped'] += 1
+                        self.training_stats['results'][symbol] = {
+                            'status': 'skipped',
+                            'reason': 'Model already exists and force_retrain=False'
+                        }
+                        self.progress.finish_symbol(symbol, status='skipped')
+
+                except Exception as e:
+                    logger.error(f"❌ Failed to train {symbol}: {e}", exc_info=True)
+                    self.training_stats['failed'] += 1
                     self.training_stats['results'][symbol] = {
-                        'status': 'success',
-                        'metrics': result.to_dict() if isinstance(result, ModelMetrics) else result
+                        'status': 'failed',
+                        'error': str(e)
                     }
-                else:
-                    self.training_stats['skipped'] += 1
-                    self.training_stats['results'][symbol] = {
-                        'status': 'skipped',
-                        'reason': 'Model already exists and force_retrain=False'
-                    }
-
-            except Exception as e:
-                logger.error(f"❌ Failed to train {symbol}: {e}", exc_info=True)
-                self.training_stats['failed'] += 1
-                self.training_stats['results'][symbol] = {
-                    'status': 'failed',
-                    'error': str(e)
-                }
-
-        self.training_stats['completed_at'] = datetime.now().isoformat()
+                    self.progress.finish_symbol(symbol, status='failed', error=str(e))
+        except Exception as pipeline_exc:
+            logger.error("💥 Pipeline crashed: %s", pipeline_exc, exc_info=True)
+            pipeline_failed = True
+        finally:
+            self.training_stats['completed_at'] = datetime.now().isoformat()
+            self.progress.complete(failed=pipeline_failed)
 
         # Итоговый отчет
         self._print_summary()
@@ -126,37 +157,82 @@ class MLTrainingPipeline:
             logger.info("   Skipping training (use force_retrain=True to retrain)")
             return None
 
-        # Загрузить исторические данные
-        logger.info(f"📥 Fetching historical data for {symbol}...")
-        df = await self.data_fetcher.fetch_full_history(
-            symbol=symbol,
-            timeframe=self.timeframe,
-            force_reload=self.force_retrain
-        )
+        # Write a lock file so _collect_ml_status() can surface "training in progress"
+        # to the hourly notification.  Always clean it up in the finally block.
+        _lock_path = self.trainer.models_dir / '.training.lock'
+        try:
+            _lock_path.parent.mkdir(parents=True, exist_ok=True)
+            _lock_path.write_text(json.dumps({'symbol': symbol}))
 
-        if df is None or len(df) < self.trainer.min_training_samples:
-            logger.error(
-                f"❌ Insufficient data for {symbol}: {len(df) if df is not None else 0} candles")
-            raise ValueError("Not enough data for training")
+            # Загрузить исторические данные
+            logger.info(f"📥 Fetching historical data for {symbol}...")
+            self.progress.begin_symbol(symbol, phase=TrainingProgressTracker.PHASE_FETCHING)
+            df = await self.data_fetcher.fetch_full_history(
+                symbol=symbol,
+                timeframe=self.timeframe,
+                force_reload=self.force_retrain
+            )
 
-        logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
-        logger.info(f"   Date range: {df.index[0]} to {df.index[-1]}")
+            if df is None or len(df) < self.trainer.min_training_samples:
+                logger.error(
+                    f"❌ Insufficient data for {symbol}: {len(df) if df is not None else 0} candles")
+                raise ValueError("Not enough data for training")
 
-        # Обучить модель
-        logger.info(f"🎓 Training model for {symbol}...")
-        metrics = self.trainer.train_model(
-            symbol=symbol,
-            df=df,
-            test_size=0.2
-        )
+            logger.info(f"✅ Loaded {len(df)} candles for {symbol}")
+            logger.info(f"   Date range: {df.index[0]} to {df.index[-1]}")
 
-        if metrics:
-            logger.info(f"✅ Training completed for {symbol}")
-            logger.info(f"   Accuracy: {metrics.accuracy:.4f}")
-            logger.info(f"   F1 Score: {metrics.f1_score:.4f}")
-            return metrics
-        else:
-            raise ValueError("Training failed")
+            # Обучить модель (first attempt, possibly with cached data)
+            logger.info(f"🎓 Training model for {symbol}...")
+            self.progress.begin_symbol(symbol, phase=TrainingProgressTracker.PHASE_TRAINING)
+            try:
+                metrics = self.trainer.train_model(
+                    symbol=symbol,
+                    df=df,
+                    test_size=0.2
+                )
+            except Exception as train_err:  # Exception excludes KeyboardInterrupt/SystemExit
+                # If the first attempt fails (e.g. cached data is stale or the
+                # cleaned feature set is too small), fetch a fresh copy from the
+                # exchange and try once more before giving up.
+                logger.warning(
+                    f"First training attempt for {symbol} failed ({train_err}); "
+                    "retrying with fresh data from exchange..."
+                )
+                df = await self.data_fetcher.fetch_full_history(
+                    symbol=symbol,
+                    timeframe=self.timeframe,
+                    force_reload=True,  # bypass the cache
+                )
+                if df is None or len(df) < self.trainer.min_training_samples:
+                    raise ValueError(
+                        f"Insufficient data even after cache refresh: "
+                        f"{len(df) if df is not None else 0} candles"
+                    ) from train_err
+                logger.info(f"Reloaded {len(df)} candles for {symbol}, retrying training...")
+                # This second call is allowed to raise — caller will log the real error.
+                metrics = self.trainer.train_model(
+                    symbol=symbol,
+                    df=df,
+                    test_size=0.2
+                )
+
+            if metrics:
+                logger.info(f"✅ Training completed for {symbol}")
+                logger.info(f"   Accuracy: {metrics.accuracy:.4f}")
+                logger.info(f"   F1 Score: {metrics.f1_score:.4f}")
+                return metrics
+            else:
+                # train_model now re-raises on failure, so this branch is a
+                # safety net for any future caller that resets the old contract.
+                raise RuntimeError(
+                    f"train_model returned no metrics for {symbol}; check logs above"
+                )
+        finally:
+            # Always remove the lock file regardless of success / failure
+            try:
+                _lock_path.unlink(missing_ok=True)
+            except Exception as _e:
+                logger.debug(f"Could not remove training lock file: {_e}")
 
     def _print_summary(self):
         """Вывести итоговый отчет"""
@@ -257,8 +333,80 @@ class MLTrainingPipeline:
 
         return "\n".join(report)
 
+    # ------------------------------------------------------------------
+    # Incremental fine-tuning from live trade outcomes
+    # ------------------------------------------------------------------
 
-async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool = False) -> Dict:
+    async def fine_tune_from_trades(
+        self,
+        trade_records: List[Dict],
+    ) -> Dict:
+        """
+        Fine-tune pre-trained models with the outcomes of recent bot trades.
+
+        This is the "layer-on-top" step: after the historical foundation is
+        trained, every closed trade yields a verified signal (direction +
+        outcome) that is used to nudge the model toward real market behaviour.
+
+        Args:
+            trade_records: List of dicts, each containing:
+                'symbol'   — e.g. 'BTCUSDT'
+                'side'     — 'BUY' or 'SELL'
+                'pnl'      — realised profit/loss in USDT
+                'entry_df' — pd.DataFrame with OHLCV up to entry (≥ lookback rows)
+
+        Returns:
+            Dict with per-symbol fine-tune results.
+        """
+        results: Dict[str, str] = {}
+
+        for record in trade_records:
+            symbol = record.get('symbol')
+            if not symbol:
+                continue
+
+            side = record.get('side', '').upper()
+            pnl = float(record.get('pnl', 0))
+            entry_df = record.get('entry_df')
+
+            if entry_df is None or not isinstance(entry_df, object):
+                results[symbol] = 'skipped: no entry_df'
+                continue
+
+            # Map trade outcome to the model's target space (UP=1 / DOWN=-1 / HOLD=0).
+            # The target represents the ACTUAL correct direction:
+            #   profitable BUY → price went UP   → correct direction was 1
+            #   profitable SELL → price went DOWN → correct direction was -1
+            #   losing BUY → price went DOWN → correct direction was -1
+            #   losing SELL → price went UP → correct direction was 1
+            #   breakeven → no clear signal → 0
+            if pnl > 0 and side == 'BUY':
+                outcome = 1      # Price moved UP — long was correct
+            elif pnl > 0 and side == 'SELL':
+                outcome = -1     # Price moved DOWN — short was correct
+            elif pnl < 0 and side == 'BUY':
+                outcome = -1     # Price moved DOWN — long was wrong
+            elif pnl < 0 and side == 'SELL':
+                outcome = 1      # Price moved UP — short was wrong
+            else:
+                outcome = 0      # Breakeven / uncertain
+
+            ok = self.trainer.fine_tune_from_trade(
+                symbol=symbol,
+                recent_df=entry_df,
+                trade_outcome=outcome,
+            )
+            results[symbol] = 'updated' if ok else 'failed'
+
+        return results
+
+
+async def initialize_ml_system(
+    exchange,
+    symbols: List[str],
+    force_retrain: bool = False,
+    models_dir: str = '/var/lib/trading-bot/models',
+) -> Dict:
     """
     Инициализировать ML систему: загрузить данные и обучить модели
 
@@ -266,6 +414,7 @@ async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool
         exchange: ExchangeAdapter instance
         symbols: Список торговых символов
         force_retrain: Принудительное переобучение
+        models_dir: Директория для хранения обученных моделей
 
     Returns:
         Dict со статистикой обучения
@@ -274,7 +423,8 @@ async def initialize_ml_system(exchange, symbols: List[str], force_retrain: bool
         exchange=exchange,
         symbols=symbols,
         timeframe='1h',
-        force_retrain=force_retrain
+        force_retrain=force_retrain,
+        models_dir=models_dir,
     )
 
     stats = await pipeline.train_all_symbols()

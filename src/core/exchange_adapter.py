@@ -47,6 +47,7 @@ class ExchangeAdapter:
                 'apiKey': self.config.exchange_api_key,
                 'secret': self.config.exchange_api_secret,
                 'enableRateLimit': True,
+                'timeout': 30000,
                 'options': {
                     'defaultType': 'spot',
                 }
@@ -63,7 +64,7 @@ class ExchangeAdapter:
                     exchange_config['sandbox'] = True
 
             self.exchange = exchange_class(exchange_config)
-            self.exchange.load_markets()
+            self._load_markets_with_retry()
 
             self.logger.info(f"Connected to {self.exchange_id} via CCXT")
             self.logger.info(f"Supported markets: {len(self.exchange.markets)}")
@@ -71,6 +72,33 @@ class ExchangeAdapter:
         except Exception as e:
             self.logger.error(f"Failed to initialize {self.exchange_id}: {str(e)}")
             raise
+
+    def _load_markets_with_retry(self, max_retries: int = 3, base_delay: float = 5.0):
+        """Load exchange markets with retry logic for transient network errors.
+
+        Args:
+            max_retries: Maximum number of retry attempts after the first try.
+            base_delay: Initial delay in seconds between retries (doubles each attempt).
+        """
+        import time
+        delay = base_delay
+        for attempt in range(max_retries + 1):
+            try:
+                self.exchange.load_markets()
+                return
+            except (ccxt.RequestTimeout, ccxt.NetworkError) as e:
+                if attempt < max_retries:
+                    self.logger.warning(
+                        f"load_markets() timed out (attempt {attempt + 1}/{max_retries + 1}), "
+                        f"retrying in {delay:.0f}s: {e}"
+                    )
+                    time.sleep(delay)
+                    delay *= 2
+                else:
+                    self.logger.error(
+                        f"load_markets() failed after {max_retries + 1} attempts: {e}"
+                    )
+                    raise
 
     def _init_binance_legacy(self):
         """Initialize Binance using legacy python-binance client (backward compatibility)"""
@@ -195,8 +223,22 @@ class ExchangeAdapter:
             self.logger.error(f"Failed to get ticker for {symbol}: {str(e)}")
             raise
 
-    def get_klines(self, symbol: str, interval: str = '1h', limit: int = 100):
-        """Get candlestick data"""
+    def get_klines(
+            self,
+            symbol: str,
+            interval: str = '1h',
+            limit: int = 100,
+            startTime: Optional[int] = None,
+            endTime: Optional[int] = None):
+        """Get candlestick data
+
+        Args:
+            symbol: Trading pair symbol
+            interval: Candle interval (e.g. '1h', '4h', '1d')
+            limit: Maximum number of candles to return
+            startTime: Start time in milliseconds (inclusive)
+            endTime: End time in milliseconds (inclusive)
+        """
         try:
             if self.use_ccxt:
                 symbol = self.normalize_symbol(symbol)
@@ -208,7 +250,9 @@ class ExchangeAdapter:
                 }
                 timeframe = timeframe_map.get(interval, '1h')
 
-                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                # CCXT uses 'since' (ms) for the start timestamp
+                ohlcv = self.exchange.fetch_ohlcv(
+                    symbol, timeframe, since=startTime, limit=limit)
 
                 # Convert to Binance format
                 # CCXT returns: [timestamp, open, high, low, close, volume]
@@ -231,7 +275,12 @@ class ExchangeAdapter:
                     for candle in ohlcv
                 ]
             else:
-                return self.exchange.get_klines(symbol=symbol, interval=interval, limit=limit)
+                kwargs = {'symbol': symbol, 'interval': interval, 'limit': limit}
+                if startTime is not None:
+                    kwargs['startTime'] = startTime
+                if endTime is not None:
+                    kwargs['endTime'] = endTime
+                return self.exchange.get_klines(**kwargs)
         except Exception as e:
             self.logger.error(f"Failed to get klines for {symbol}: {str(e)}")
             raise

@@ -31,18 +31,61 @@ class HistoricalDataFetcher:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Даты первого появления основных криптовалют на Binance
+        # Dates when each pair first appeared on Binance.
+        # These are used to download the maximum possible historical depth
+        # so the model can learn from every market cycle the coin has seen.
         self.symbol_launch_dates = {
-            'BTCUSDT': '2017-08-17',  # BTC торгуется с начала Binance
-            'ETHUSDT': '2017-08-17',  # ETH также с начала
-            'BNBUSDT': '2017-11-06',  # BNB ICO
-            'ADAUSDT': '2018-04-17',  # ADA листинг
-            'SOLUSDT': '2020-08-11',  # SOL листинг
-            'XRPUSDT': '2018-05-04',  # XRP листинг
-            'DOTUSDT': '2020-08-19',  # DOT листинг
-            'DOGEUSDT': '2019-07-05',  # DOGE листинг
-            'AVAXUSDT': '2020-09-22',  # AVAX листинг
-            'MATICUSDT': '2019-04-26',  # MATIC листинг
+            # ── Major BTC/ETH ──────────────────────────────────────────────
+            'BTCUSDT':   '2017-08-17',
+            'ETHUSDT':   '2017-08-17',
+            'BNBUSDT':   '2017-11-06',
+            # ── Layer-1 / Smart-contract platforms ──────────────────────────
+            'ADAUSDT':   '2018-04-17',
+            'SOLUSDT':   '2020-08-11',
+            'DOTUSDT':   '2020-08-19',
+            'AVAXUSDT':  '2020-09-22',
+            'MATICUSDT': '2019-04-26',
+            'NEARUSDT':  '2020-10-16',
+            'FTMUSDT':   '2019-06-12',
+            'ALGOUSDT':  '2019-06-22',
+            'ATOMUSDT':  '2019-04-22',
+            'LTCUSDT':   '2017-12-13',
+            'TRXUSDT':   '2018-06-11',
+            'XLMUSDT':   '2018-01-05',
+            'VETUSDT':   '2019-07-01',
+            'HBARUSDT':  '2020-09-17',
+            'ICPUSDT':   '2021-05-10',
+            'FILUSDT':   '2020-10-15',
+            'EGLDUSDT':  '2020-09-03',
+            'FLOWUSDT':  '2021-04-07',
+            'THETAUSDT': '2019-01-17',
+            'AXSUSDT':   '2020-11-04',
+            'SANDUSDT':  '2020-08-14',
+            'MANAUSDT':  '2020-08-06',
+            'GALAUSDT':  '2021-09-16',
+            'APEUSDT':   '2022-03-17',
+            'OPUSDT':    '2022-06-01',
+            'ARBUSDT':   '2023-03-23',
+            'SEIUSDT':   '2023-08-15',
+            'SUIUSDT':   '2023-05-03',
+            # ── DeFi ────────────────────────────────────────────────────────
+            'UNIUSDT':   '2020-09-17',
+            'AAVEUSDT':  '2020-10-16',
+            'MKRUSDT':   '2019-04-26',
+            'COMPUSDT':  '2020-06-23',
+            'SNXUSDT':   '2019-01-24',
+            'CRVUSDT':   '2020-08-14',
+            '1INCHUSDT': '2021-01-11',
+            'LDOUSDT':   '2023-02-09',
+            # ── Meme / high-volatility ───────────────────────────────────────
+            'DOGEUSDT':  '2019-07-05',
+            'SHIBUSDT':  '2021-05-11',
+            'PEPEUSDT':  '2023-05-05',
+            # ── Layer-2 ──────────────────────────────────────────────────────
+            'IMXUSDT':   '2021-11-24',
+            # ── Payments / utility ───────────────────────────────────────────
+            'XRPUSDT':   '2018-05-04',
+            'LINKUSDT':  '2017-11-22',
         }
 
         # Стандартная дата для неизвестных символов (начало Binance)
@@ -62,8 +105,34 @@ class HistoricalDataFetcher:
         return datetime.strptime(date_str, '%Y-%m-%d')
 
     def _get_cache_path(self, symbol: str, timeframe: str) -> Path:
-        """Путь к кэшированному файлу"""
-        return self.cache_dir / f"{symbol}_{timeframe}.parquet"
+        """Путь к кэшированному файлу (parquet, или csv как запасной вариант)"""
+        parquet_path = self.cache_dir / f"{symbol}_{timeframe}.parquet"
+        csv_path = self.cache_dir / f"{symbol}_{timeframe}.csv"
+        # Prefer existing CSV over missing parquet (legacy fallback)
+        if not parquet_path.exists() and csv_path.exists():
+            return csv_path
+        return parquet_path
+
+    def _save_cache(self, df: pd.DataFrame, cache_path: Path) -> None:
+        """Сохранить DataFrame в кэш; пробует parquet, при неудаче — csv"""
+        if str(cache_path).endswith('.csv'):
+            df.to_csv(cache_path, index=True)
+            return
+        try:
+            df.to_parquet(cache_path)
+        except Exception as parquet_err:
+            csv_path = cache_path.with_suffix('.csv')
+            logger.warning(
+                f"Parquet save failed ({parquet_err}), falling back to CSV: {csv_path}")
+            df.to_csv(csv_path, index=True)
+
+    def _load_cache(self, cache_path: Path) -> pd.DataFrame:
+        """Загрузить DataFrame из кэша (parquet или csv)"""
+        if str(cache_path).endswith('.csv'):
+            df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
+            df.index = pd.to_datetime(df.index)
+            return df
+        return pd.read_parquet(cache_path)
 
     def _get_metadata_path(self, symbol: str, timeframe: str) -> Path:
         """Путь к метаданным кэша"""
@@ -101,7 +170,7 @@ class HistoricalDataFetcher:
                     # Если кэш свежий (< 24 часов), использовать его
                     if datetime.now() - last_update < timedelta(hours=24):
                         logger.info(f"📂 Loading {symbol} {timeframe} from cache")
-                        df = pd.read_parquet(cache_path)
+                        df = self._load_cache(cache_path)
                         logger.info(
                             f"✅ Loaded {len(df)} candles from cache (from {df.index[0]} to {df.index[-1]})")
                         return df
@@ -135,7 +204,7 @@ class HistoricalDataFetcher:
                     symbol=symbol,
                     interval=timeframe,
                     limit=limit,
-                    start_time=int(current_start.timestamp() * 1000)
+                    startTime=int(current_start.timestamp() * 1000)
                 )
 
                 if not candles or len(candles) == 0:
@@ -176,7 +245,7 @@ class HistoricalDataFetcher:
 
         # Сохранить в кэш
         try:
-            df.to_parquet(cache_path)
+            self._save_cache(df, cache_path)
 
             # Сохранить метаданные
             metadata = {
@@ -272,7 +341,7 @@ class HistoricalDataFetcher:
 
         # Загрузить существующий кэш
         try:
-            df = pd.read_parquet(cache_path)
+            df = self._load_cache(cache_path)
             last_timestamp = df.index[-1]
 
             # Загрузить новые данные
@@ -282,7 +351,7 @@ class HistoricalDataFetcher:
                 symbol=symbol,
                 interval=timeframe,
                 limit=1000,
-                start_time=int(last_timestamp.timestamp() * 1000)
+                startTime=int(last_timestamp.timestamp() * 1000)
             )
 
             if candles and len(candles) > 0:
@@ -294,7 +363,7 @@ class HistoricalDataFetcher:
                 df.sort_index(inplace=True)
 
                 # Сохранить
-                df.to_parquet(cache_path)
+                self._save_cache(df, cache_path)
 
                 logger.info(f"✅ Updated {symbol}: added {len(new_df)} new candles, total {len(df)}")
 

@@ -1,6 +1,7 @@
 [Unit]
 Description=Trading Bot Service
-After=network.target
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
@@ -8,9 +9,26 @@ User=tradingbot
 Group=tradingbot
 WorkingDirectory=/opt/trading-bot
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/src/main.py
+Environment="PYTHONPATH=/opt/trading-bot/src:/opt/trading-bot"
+# Load operator-supplied variables (.env) without requiring python-dotenv.
+# The "-" prefix makes systemd silently ignore the file if it does not exist.
+EnvironmentFile=-/opt/trading-bot/.env
+
+# Run as root (the "+" prefix overrides User=tradingbot for this step only).
+# First ensure the pre-start script is executable — a plain 'git pull' does not
+# set file modes on disk, so the execute bit can be missing after an update.
+ExecStartPre=+/bin/chmod +x /opt/trading-bot/scripts/venv_prestart.sh
+# This pre-start script creates the venv if absent, fixes its ownership so
+# the service user can read it, and installs / updates Python packages whenever
+# requirements.txt has changed — completely hands-free after any git pull.
+ExecStartPre=+/opt/trading-bot/scripts/venv_prestart.sh
+
+# start_bot.sh checks that venv/bin/python3 exists and exec's into main.py.
+ExecStart=/opt/trading-bot/scripts/start_bot.sh
 Restart=on-failure
 RestartSec=10
+# Allow extra time for the venv pre-start step on first boot / after updates.
+TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
 

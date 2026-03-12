@@ -61,7 +61,15 @@ class TelegramNotifier:
                 'parse_mode': parse_mode
             }
 
-            response = requests.post(url, json=payload, timeout=10, verify=True)
+            # Use system CA bundle from environment (set by start_bot.sh) when
+            # certifi's cacert.pem is missing after a disk-full venv rebuild.
+            ca_bundle = (
+                os.environ.get('REQUESTS_CA_BUNDLE') or
+                os.environ.get('CURL_CA_BUNDLE') or
+                True
+            )
+
+            response = requests.post(url, json=payload, timeout=10, verify=ca_bundle)
             response.raise_for_status()
 
             logger.debug("Telegram message sent successfully")

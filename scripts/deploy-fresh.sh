@@ -40,10 +40,10 @@ echo ""
 # Step 2: Create backup with timestamp
 print_info "Step 2/8: Creating backup..."
 cd /opt
-if [ -d "Life_Is_A_Joke" ]; then
+if [ -d "trading-bot" ]; then
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    BACKUP_DIR="Life_Is_A_Joke.backup.$TIMESTAMP"
-    mv Life_Is_A_Joke "$BACKUP_DIR"
+    BACKUP_DIR="trading-bot.backup.$TIMESTAMP"
+    mv trading-bot "$BACKUP_DIR"
     print_info "   ✅ Backup created: $BACKUP_DIR"
 else
     print_warning "   No existing installation to backup"
@@ -52,20 +52,20 @@ echo ""
 
 # Step 3: Clone repository
 print_info "Step 3/8: Cloning repository..."
-git clone -b copilot/update-notification-format https://github.com/donganhhuynh405-a11y/Life_Is_A_Joke.git Life_Is_A_Joke
-cd Life_Is_A_Joke
+git clone -b main https://github.com/donganhhuynh405-a11y/life-is_a_joke.git trading-bot
+cd trading-bot
 print_info "   ✅ Repository cloned"
 echo ""
 
 # Step 4: Restore .env
 print_info "Step 4/8: Restoring configuration..."
-LATEST_BACKUP=$(ls -td /opt/Life_Is_A_Joke.backup* 2>/dev/null | head -1)
+LATEST_BACKUP=$(ls -td /opt/trading-bot.backup* 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP/.env" ]; then
     cp "$LATEST_BACKUP/.env" .
     print_info "   ✅ .env restored from $LATEST_BACKUP"
 else
     print_warning "   No .env found - you'll need to configure manually"
-    print_warning "   Copy from: cp /opt/Life_Is_A_Joke.backup*/.env /opt/Life_Is_A_Joke/"
+    print_warning "   Copy from: cp /opt/trading-bot.backup*/.env /opt/trading-bot/"
 fi
 echo ""
 
@@ -77,17 +77,40 @@ echo ""
 
 # Step 6: Install dependencies
 print_info "Step 6/8: Installing dependencies..."
-venv/bin/pip install --upgrade pip > /dev/null 2>&1
 venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 print_info "   ✅ Dependencies installed"
 echo ""
 
+# Record stamp so start_bot.sh does not re-try pip install on first startup
+sha256sum requirements.txt > venv/.requirements_installed 2>/dev/null || true
+
 # Step 7: Set permissions
+# IMPORTANT: the systemd service runs as 'tradingbot', so the entire app
+# directory (including the venv) must be owned by that user, not root.
 print_info "Step 7/8: Setting permissions..."
-chown -R root:root /opt/Life_Is_A_Joke
+if id "tradingbot" &>/dev/null; then
+    chown -R tradingbot:tradingbot /opt/trading-bot
+    print_info "   ✅ Permissions set (tradingbot:tradingbot)"
+else
+    print_warning "   User 'tradingbot' not found — skipping chown"
+    print_warning "   Create the user first: useradd --system --no-create-home --shell /bin/false tradingbot"
+fi
 chmod +x scripts/*.sh 2>/dev/null || true
 chmod +x scripts/*.py 2>/dev/null || true
-print_info "   ✅ Permissions set"
+echo ""
+
+# Install the systemd service file.  This ensures ExecStartPre=+venv_prestart.sh
+# is always in place so that on every subsequent start the venv ownership and
+# packages are fixed automatically — even after a manual git pull.
+SERVICE_SRC="/opt/trading-bot/deployment/systemd/trading-bot.service"
+SERVICE_DST="/etc/systemd/system/trading-bot.service"
+if [ -f "$SERVICE_SRC" ]; then
+    print_info "   Installing systemd service file..."
+    cp "$SERVICE_SRC" "$SERVICE_DST"
+    systemctl daemon-reload
+    systemctl enable trading-bot 2>/dev/null || true
+    print_info "   ✅ systemd service file installed and enabled"
+fi
 echo ""
 
 # Step 8: Start bot

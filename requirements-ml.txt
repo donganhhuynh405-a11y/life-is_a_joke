@@ -1,0 +1,47 @@
+# =============================================================================
+# Heavy ML / AI packages — OPTIONAL
+# =============================================================================
+# Install ONLY if your server has enough free disk space (≥ 10 GB recommended)
+# and you want the advanced AI trading strategies.
+#
+# The bot runs correctly without these packages; all ML code uses lazy imports
+# with try/except ImportError so it degrades gracefully when they are absent.
+#
+# Usage:
+#   pip install -r requirements-ml.txt
+#
+# Disk-space estimate:
+#   tensorflow-cpu : ~274 MB
+#   torch (CPU)    : ~200 MB  ← CPU-only wheel avoids CUDA libraries
+#   transformers   : ~100 MB
+#   pytorch-lightning, tensorboard, einops, sentencepiece, optuna : ~200 MB
+#   Total          : ~800 MB  (vs. ~2.5 GB if installing from the default PyPI index)
+#
+# NOTE: torch is installed from the official PyTorch CPU index to avoid
+# pulling in nvidia_cublas_cu12 (~600 MB) and other CUDA packages that PyPI
+# bundles even on CPU-only servers.
+# =============================================================================
+
+# Core requirements must already be installed:
+-r requirements.txt
+
+# TensorFlow (CPU-only build; avoids the cuda-bindings/cuda-pathfinder wheels
+# that the standard 'tensorflow' package installs on Linux even without a GPU).
+tensorflow-cpu>=2.15.0
+
+# PyTorch — CPU-only wheel from the official PyTorch CDN.
+# This avoids downloading nvidia_cublas_cu12 (~600 MB) and related CUDA libs.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.6.0
+
+# Hugging Face ecosystem
+transformers>=4.48.0
+sentencepiece>=0.2.1
+
+# Advanced training / optimisation utilities
+optuna>=3.5.0          # Hyperparameter optimization
+pytorch-lightning>=2.1.0  # Advanced training utilities
+
+# Visualisation / transformer utilities
+tensorboard>=2.15.0    # Training visualization
+einops>=0.7.0          # Tensor operations for transformers

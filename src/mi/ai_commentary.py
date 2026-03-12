@@ -422,13 +422,18 @@ class AICommentaryGenerator:
             return ""
 
     def generate_daily_summary_commentary(self, daily_pnl: float,
-                                          open_positions: int) -> str:
+                                          open_positions: int,
+                                          monthly_roi: Optional[float] = None) -> str:
         """
         Generate AI commentary for daily summary with comprehensive multi-timeframe analysis
 
         Args:
             daily_pnl: Daily profit/loss
             open_positions: Number of open positions
+            monthly_roi: Pre-computed monthly ROI in percent (e.g. 5.3 means +5.3%).
+                When provided this value is used in the monthly performance line so it
+                matches the figure shown in the notification header — making ROI
+                consistent across the entire message.
 
         Returns:
             Commentary string with strategic insights
@@ -559,33 +564,26 @@ class AICommentaryGenerator:
                 win_rate_30d = perf_30d.get('win_rate', 0)
                 profit_factor_30d = perf_30d.get('profit_factor', 0)
 
-                # Compute ROI from start-of-month USDT balance snapshot
-                start_balance = self._get_start_of_month_balance()
-                if monthly_pnl != 0 and start_balance:
-                    roi = (monthly_pnl / start_balance) * 100
-                    sign = "profit" if monthly_pnl > 0 else "loss"
-                    parts.append(
-                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
-                        f"({win_rate_30d:.0f}% win rate, ~{roi:+.1f}% ROI)")
-                elif monthly_pnl > 0:
-                    parts.append(
-                        f"📅 <b>Monthly performance:</b> ${monthly_pnl:,.2f} profit "
-                        f"({win_rate_30d:.0f}% win rate)")
+                # Prefer the pre-computed monthly_roi passed in by the caller (from
+                # balance snapshots, the same value shown in the notification header).
+                # Fall back to estimating from trade P&L only when no external value
+                # is available, so that the two ROI figures are always consistent.
+                if monthly_roi is not None:
+                    roi = monthly_roi
                 else:
-                    parts.append(
-                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} loss "
-                        f"({win_rate_30d:.0f}% win rate)")
+                    start_balance = self._get_start_of_month_balance()
+                    roi = (monthly_pnl / start_balance) * 100 if start_balance else None
 
-                # Guard: if the appended ROI is implausible (> 100 % MoM the
-                # USDT-only snapshot understates the full portfolio), replace
-                # the last message with one that omits the misleading figure.
-                if (monthly_pnl != 0 and start_balance
-                        and abs((monthly_pnl / start_balance) * 100) > 100
-                        and parts):
-                    _sign = "profit" if monthly_pnl > 0 else "loss"
-                    parts[-1] = (
-                        f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {_sign} "
-                        f"({win_rate_30d:.0f}% win rate)")
+                sign = "profit" if monthly_pnl > 0 else "loss"
+
+                # Include ROI in the line only when it rounds to something non-zero
+                # and is within plausible range (≤ 100 % MoM).
+                roi_str = ""
+                if roi is not None and abs(roi) >= 0.005 and abs(roi) <= 100:
+                    roi_str = f", ~{roi:+.1f}% ROI"
+                parts.append(
+                    f"📅 <b>Monthly performance:</b> ${abs(monthly_pnl):,.2f} {sign} "
+                    f"({win_rate_30d:.0f}% win rate{roi_str})")
 
                 if profit_factor_30d and profit_factor_30d > 0:
                     if profit_factor_30d > 2.5:

@@ -6,10 +6,10 @@ A Binance trading bot with automated trading strategies, risk management, and mo
 
 import os
 import sys
+import time
 import signal
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add src directory and parent directory to Python path
 src_dir = Path(__file__).parent
@@ -23,11 +23,16 @@ try:
     from core.config import Config
     from utils.logger import setup_logger
 except ImportError as e:
-    # Fallback: try absolute imports
+    # A missing dependency at import time would cause the container to exit
+    # instantly with code 1, making Docker restart it in a tight loop before
+    # any backoff can take effect.  Sleep 30s so the restart policy has time
+    # to slow down retries while the operator investigates the issue.
     print(f"Import error: {e}")
     print(f"Python path: {sys.path}")
     print(f"Current directory: {os.getcwd()}")
     print(f"Script location: {Path(__file__).parent}")
+    print("Sleeping 30s before exit so Docker restart policy can apply…")
+    time.sleep(30)
     sys.exit(1)
 
 
@@ -41,15 +46,20 @@ def signal_handler(signum, frame):
 def main():
     """Main application entry point"""
     # Load environment variables
-    env_file = os.environ.get('CONFIG_DIR', '/etc/trading-bot') + '/.env'
-    if not os.path.exists(env_file):
-        env_file = '.env'
+    try:
+        from dotenv import load_dotenv
+        env_file = os.environ.get('CONFIG_DIR', '/etc/trading-bot') + '/.env'
+        if not os.path.exists(env_file):
+            env_file = '.env'
 
-    if os.path.exists(env_file):
-        load_dotenv(env_file)
-        print(f"Loaded environment from: {env_file}")
-    else:
-        print(f"Warning: No .env file found at {env_file}")
+        if os.path.exists(env_file):
+            load_dotenv(env_file)
+            print(f"Loaded environment from: {env_file}")
+        else:
+            print(f"Warning: No .env file found at {env_file}")
+    except ImportError:
+        print("Warning: python-dotenv not installed — skipping .env loading. "
+              "Set environment variables via the system (e.g. systemd EnvironmentFile=).")
 
     # Setup logging
     logger = setup_logger()
@@ -80,6 +90,12 @@ def main():
         logger.info("Shutdown requested by user")
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}", exc_info=True)
+        # Sleep before exiting so Docker's restart backoff policy has time to
+        # kick in.  Without this the container immediately re-exits and Docker
+        # can reach its restart limit very quickly, causing the container to
+        # enter the "Restarting" state indefinitely.
+        logger.info("Sleeping 30s before exit so Docker restart policy can apply…")
+        time.sleep(30)
         sys.exit(1)
     finally:
         logger.info("Trading bot stopped")
