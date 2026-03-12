@@ -43,6 +43,7 @@ class Database:
             # it here (not lazily) to detect auth/network failures immediately
             # and fall back to SQLite before the bot starts trading.
             self.conn = self.engine.raw_connection()
+            self._is_sqlite = False
             self.logger.info("Connected to PostgreSQL")
             return True
         except _SQLALCHEMY_ERRORS as pg_err:
@@ -67,6 +68,7 @@ class Database:
             isolation_level=None,  # Autocommit mode for immediate persistence
         )
         self.conn.row_factory = sqlite3.Row
+        self._is_sqlite = True
 
         # Enable WAL mode for better concurrency and persistence
         self.conn.execute('PRAGMA journal_mode=WAL')
@@ -79,10 +81,18 @@ class Database:
         """Initialize database schema"""
         cursor = self.conn.cursor()
 
+        # SQLite requires INTEGER PRIMARY KEY for auto-increment rowid aliasing;
+        # PostgreSQL uses SERIAL.  Using the wrong type in SQLite causes the id
+        # column to stay NULL, which breaks position tracking.
+        if self._is_sqlite:
+            id_col = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        else:
+            id_col = "SERIAL PRIMARY KEY"
+
         # Trades table
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS trades (
-                id SERIAL PRIMARY KEY,
+                id {id_col},
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 order_id TEXT UNIQUE,
@@ -99,9 +109,9 @@ class Database:
 
         # Positions table (exit_price and pnl are included inline so the
         # ALTER TABLE migration stanzas below are no-ops on a fresh install)
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS positions (
-                id SERIAL PRIMARY KEY,
+                id {id_col},
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 entry_price REAL NOT NULL,
@@ -131,9 +141,9 @@ class Database:
         ''')
 
         # Balance snapshots table - records USDT balance at a point in time
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS balance_snapshots (
-                id SERIAL PRIMARY KEY,
+                id {id_col},
                 balance_usdt REAL NOT NULL,
                 recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -179,6 +189,28 @@ class Database:
         except Exception as e:
             self.conn.rollback()
             self.logger.debug(f"Skipping zero-date timestamp fix: {e}")
+
+        # Fix SQLite databases created with "id SERIAL PRIMARY KEY" which left
+        # the id column as NULL for every row (SERIAL is not a SQLite keyword).
+        # Assign the internal rowid as the id so that position tracking works.
+        # Table names come from a hardcoded whitelist below — no user input is
+        # interpolated, so the f-string is safe despite the linter warning.
+        _MIGRABLE_TABLES = frozenset({'positions', 'trades', 'balance_snapshots'})
+        if self._is_sqlite:
+            for table in _MIGRABLE_TABLES:
+                try:
+                    cursor.execute(
+                        f"UPDATE {table} SET id = rowid WHERE id IS NULL"  # safe: hardcoded whitelist
+                    )
+                    if cursor.rowcount > 0:
+                        self.logger.info(
+                            f"Fixed {cursor.rowcount} NULL id(s) in {table} table "
+                            "(was created with SERIAL instead of INTEGER PRIMARY KEY)"
+                        )
+                    self.conn.commit()
+                except Exception as e:
+                    self.conn.rollback()
+                    self.logger.debug(f"Skipping NULL-id fix for {table}: {e}")
 
         self.logger.info("Database schema initialized")
 

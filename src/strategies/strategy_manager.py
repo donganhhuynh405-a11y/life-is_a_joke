@@ -713,16 +713,51 @@ class StrategyManager:
         position_id = signal.get('position_id')
         score = signal.get('confidence')  # Get signal score
 
+        # resolved_position is used when position_id is NULL (legacy SERIAL bug)
+        resolved_position = None
+
         if not position_id:
-            self.logger.warning("No position ID in close signal")
-            return
+            # Fallback: try to find the open position by symbol.
+            # This can happen when the database was created with "SERIAL PRIMARY KEY"
+            # (a SQLite bug that left id = NULL), or when the signal was generated
+            # without a position reference.
+            symbol = signal.get('symbol')
+            if symbol:
+                open_positions = self.db.get_open_positions()
+                match = next((p for p in open_positions if p.get('symbol') == symbol), None)
+                if match:
+                    position_id = match.get('id') or match.get('rowid')
+                    if position_id:
+                        self.logger.warning(
+                            f"Close signal had no position_id for {symbol}; "
+                            f"resolved to position {position_id} by symbol lookup"
+                        )
+                    else:
+                        # position id is still None/0 (legacy NULL id bug); use dict directly
+                        self.logger.warning(
+                            f"Close signal had no position_id for {symbol}; "
+                            "using symbol lookup (id still NULL — restart bot after DB fix)"
+                        )
+                        resolved_position = match
+                else:
+                    self.logger.warning(
+                        f"No position ID in close signal and no open position found for {symbol}"
+                    )
+                    return
+            else:
+                self.logger.warning("No position ID in close signal")
+                return
 
         try:
             # Get position details before closing
-            position = self.db.get_position(position_id)
+            position = resolved_position if resolved_position is not None else self.db.get_position(position_id)
             if not position:
                 self.logger.warning(f"Position {position_id} not found")
                 return
+
+            # Ensure position_id is set (may still be None for legacy NULL-id rows)
+            if not position_id:
+                position_id = position.get('id') or position.get('rowid')
 
             if position.get('status') == 'closed':
                 self.logger.warning(f"Position {position_id} is already closed, skipping close operation")
