@@ -9,12 +9,14 @@ import sqlite3
 from typing import List, Dict, Optional
 from pathlib import Path
 
-from sqlalchemy import create_engine
 try:
+    from sqlalchemy import create_engine
     from sqlalchemy import exc as sqlalchemy_exc
+    _SQLALCHEMY_AVAILABLE = True
     _SQLALCHEMY_ERRORS = (sqlalchemy_exc.DatabaseError, sqlalchemy_exc.OperationalError)
-except Exception:
-    # Fallback: catch any exception if the exc submodule is unavailable
+except ImportError:
+    # SQLAlchemy is optional; without it the bot falls back to SQLite
+    _SQLALCHEMY_AVAILABLE = False
     _SQLALCHEMY_ERRORS = (Exception,)
 
 
@@ -34,6 +36,8 @@ class Database:
 
     def _try_postgres(self) -> bool:
         """Attempt to connect to PostgreSQL. Returns True on success."""
+        if not _SQLALCHEMY_AVAILABLE:
+            return False
         db_url = os.getenv('DATABASE_URL')
         if not db_url or 'postgresql' not in db_url:
             return False
