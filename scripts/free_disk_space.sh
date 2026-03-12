@@ -94,10 +94,14 @@ done
 info "pip/poetry caches cleared for all users"
 
 # ---------------------------------------------------------------------------
-section "Step 4: Clear ALL temporary files"
+section "Step 4: Clear temporary files"
 # ---------------------------------------------------------------------------
-# Wipe /tmp entirely (it is ephemeral — nothing important should be there)
-find /tmp -mindepth 1 -maxdepth 4 -exec rm -rf {} + 2>/dev/null || true
+# Remove files older than 1 hour; preserve active sockets/pipes used by
+# running processes (X11, systemd, etc.)
+find /tmp -mindepth 1 -maxdepth 4 \
+     ! -name ".X11-unix" ! -name ".ICE-unix" ! -name ".XIM-unix" \
+     ! -name "systemd-*" \
+     -mmin +60 -exec rm -rf {} + 2>/dev/null || true
 find /var/tmp -mindepth 1 -maxdepth 3 -mtime +1 -exec rm -rf {} + 2>/dev/null || true
 info "Temporary directories cleaned"
 
@@ -209,13 +213,14 @@ find /var/log -name "*.1" -mtime +7 -delete 2>/dev/null || true
 find /var/log -name "*.2" -delete 2>/dev/null || true
 find /var/log -name "*.3" -delete 2>/dev/null || true
 find /var/log -name "*.4" -delete 2>/dev/null || true
-# Truncate (not delete) large active log files to keep logging working
+# Truncate (not delete) large active log files to keep logging working.
+# Use truncate(1) which is atomic and avoids a temp-file on a full disk.
 for logfile in /var/log/trading-bot/*.log /var/log/syslog /var/log/auth.log; do
     [ -f "$logfile" ] || continue
     sz_kb=$(du -k "$logfile" 2>/dev/null | cut -f1)
     if [ "${sz_kb:-0}" -gt 51200 ]; then   # > 50 MB
-        step "  Truncating large log: $logfile (${sz_kb} KB)"
-        tail -c 5242880 "$logfile" > "${logfile}.tmp" && mv "${logfile}.tmp" "$logfile" || true
+        step "  Truncating large log: $logfile (${sz_kb} KB → 5 MB)"
+        truncate -s 5M "$logfile" 2>/dev/null || true
     fi
 done
 info "Old/large log files cleaned"
@@ -224,9 +229,11 @@ info "Old/large log files cleaned"
 section "Step 13: Docker — full cleanup (all unused images, containers, volumes)"
 # ---------------------------------------------------------------------------
 if command -v docker &>/dev/null; then
-    step "Stopping all non-essential Docker containers..."
-    # Keep only containers marked as 'running' AND not the trading-bot itself
-    docker stop $(docker ps -q 2>/dev/null) 2>/dev/null || true
+    step "Stopping all running Docker containers..."
+    RUNNING_CONTAINERS=$(docker ps -q 2>/dev/null || true)
+    if [ -n "$RUNNING_CONTAINERS" ]; then
+        echo "$RUNNING_CONTAINERS" | xargs docker stop 2>/dev/null || true
+    fi
 
     step "Removing all stopped/exited containers..."
     docker container prune -f 2>/dev/null || true

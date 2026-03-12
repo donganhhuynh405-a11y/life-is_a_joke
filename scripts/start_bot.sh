@@ -149,7 +149,7 @@ CERTIFI_BUNDLE_PATH=$("$VENV_PYTHON" -c "import certifi; print(certifi.where())"
 if [ -n "$CERTIFI_BUNDLE_PATH" ] && [ ! -f "$CERTIFI_BUNDLE_PATH" ]; then
     echo "[start_bot] WARNING: certifi CA bundle missing at $CERTIFI_BUNDLE_PATH" >&2
     echo "[start_bot] Attempting to reinstall certifi (system CA bundle is already active)..." >&2
-    "$VENV_DIR/bin/pip" install --force-reinstall --no-cache-dir certifi 2>&1 \
+    "$VENV_PYTHON" -m pip install --force-reinstall --no-cache-dir certifi 2>&1 \
         | sed 's/^/[start_bot] /' >&2 || true
 fi
 
